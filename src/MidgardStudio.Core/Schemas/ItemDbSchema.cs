@@ -1,5 +1,6 @@
 using MidgardStudio.Core.Model;
 using MidgardStudio.Core.Schema;
+using MidgardStudio.Core.Validation;
 
 namespace MidgardStudio.Core.Schemas;
 
@@ -79,8 +80,8 @@ public static class ItemDbSchema
         Fields = new[]
         {
             new FieldSchema { Name = "Id", Label = "Item ID", Kind = FieldKind.Int, IsKey = true, Group = GGeneral },
-            new FieldSchema { Name = "AegisName", Label = "Aegis Name", Kind = FieldKind.String, Group = GGeneral, Description = "Server name (no spaces)." },
-            new FieldSchema { Name = "Name", Label = "Name", Kind = FieldKind.String, IsDisplay = true, Group = GGeneral },
+            new FieldSchema { Name = "AegisName", Label = "Aegis Name", Kind = FieldKind.String, Group = GGeneral, Description = "Server name (no spaces).", IsRequired = true, Unique = true, MaxLength = 50, MaxLengthSeverity = ValidationSeverity.Error },
+            new FieldSchema { Name = "Name", Label = "Name", Kind = FieldKind.String, IsDisplay = true, Group = GGeneral, MaxLength = 50 },
             FieldSchema.EnumField("Type", "Type", ItemEnums.Type, "Etc", GGeneral),
             new FieldSchema
             {
@@ -95,7 +96,7 @@ public static class ItemDbSchema
             new FieldSchema { Name = "MagicAttack", Label = "Magic Attack", Kind = FieldKind.Int, Default = 0, Group = GCombat, Renewal = RenewalScope.RenewalOnly },
             FieldSchema.Int("Defense", "Defense", group: GCombat),
             FieldSchema.Int("Range", "Range", group: GCombat),
-            FieldSchema.Int("Slots", "Slots", group: GCombat),
+            new FieldSchema { Name = "Slots", Label = "Slots", Kind = FieldKind.Int, Default = 0, Group = GCombat, Min = 0, Max = 4 },
             new FieldSchema
             {
                 Name = "WeaponLevel", Label = "Weapon Level", Kind = FieldKind.Int, Default = 0, Group = GCombat,
@@ -116,7 +117,7 @@ public static class ItemDbSchema
             FieldSchema.Bool("Refineable", "Refineable", group: GRestrict),
             new FieldSchema { Name = "Gradable", Label = "Gradable", Kind = FieldKind.Bool, Default = false, Group = GRestrict, Renewal = RenewalScope.RenewalOnly },
             FieldSchema.Int("View", "View (sprite id)", group: GRestrict),
-            new FieldSchema { Name = "AliasName", Label = "Alias Name", Kind = FieldKind.Reference, Enum = EnumSource.Reference("ItemAlias", "item_db"), Group = GRestrict },
+            new FieldSchema { Name = "AliasName", Label = "Alias Name", Kind = FieldKind.Reference, Enum = EnumSource.Reference("ItemAlias", "item_db"), Group = GRestrict, ReferenceSeverity = ValidationSeverity.Error },
 
             FieldSchema.ObjectField("Flags", "Flags", Flags, GFlags),
             FieldSchema.ObjectField("Delay", "Delay", Delay, GFlags),

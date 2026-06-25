@@ -24,13 +24,13 @@ public sealed class WorkspaceSession
     {
         _config = configService.Load();
         Mode = _config.DefaultMode;
-        Validation = new ValidationService().Register(new ItemValidator());
+        Validation = ValidationEngine.CreateDefault();
         ScriptCatalog = LoadScriptCatalog(_config);
     }
 
     public EditCommandStack Commands { get; } = new();
 
-    public ValidationService Validation { get; }
+    public ValidationEngine Validation { get; }
 
     public ScriptCommandCatalog ScriptCatalog { get; private set; }
 

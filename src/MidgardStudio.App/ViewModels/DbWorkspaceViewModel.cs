@@ -168,8 +168,16 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void SelectInClientItems()
     {
-        if (!IsItemDb) return;
-        if (List?.SelectedRow is { } row) _navigate?.Invoke("client_items", row.Key);
+        if (!IsItemDb || List?.SelectedRow is not { } row) return;
+        int id = (int)row.Key.AsInt;
+        if (_clientItems is null || !_clientItems.Exists(id))
+        {
+            Views.ConfirmDialog.Alert("Not in Client Items",
+                $"Item #{id} doesn't exist in the Client Items files (itemInfo.lua / itemInfo_C.lua) yet.\n\n" +
+                "Use “Add in Client Items” to create its client text.");
+            return;
+        }
+        _navigate?.Invoke("client_items", row.Key);
     }
 
     [RelayCommand]
@@ -273,7 +281,7 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
         _modeSet = await Task.Run(() => _session.GetModeSet(_schema));
         _overlay = _modeSet.For(_session.Mode);
 
-        var editor = new RecordEditorViewModel(_overlay, _session.Commands, _references, _session.ScriptCatalog, _session.Mode);
+        var editor = new RecordEditorViewModel(_overlay, _session.Commands, _references, _session.ScriptCatalog, _session.Mode, _session.Validation);
 
         // Items get list icons resolved from their client resource name (lazy, per visible row).
         Func<RecordKey, ImageSource?>? iconResolver = null;

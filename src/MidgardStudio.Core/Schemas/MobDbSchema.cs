@@ -1,4 +1,5 @@
 using MidgardStudio.Core.Schema;
+using MidgardStudio.Core.Validation;
 
 namespace MidgardStudio.Core.Schemas;
 
@@ -14,7 +15,7 @@ public static class MobDbSchema
     public static readonly DbSchema DropElement = DbSchema.Nested("MobDrop", new[]
     {
         new FieldSchema { Name = "Item", Label = "Item", Kind = FieldKind.Reference, Enum = EnumSource.Reference("DropItem", "item_db") },
-        new FieldSchema { Name = "Rate", Label = "Rate", Kind = FieldKind.Int, Default = 0, RateScale = 10000 },
+        new FieldSchema { Name = "Rate", Label = "Rate", Kind = FieldKind.Int, Default = 0, RateScale = 10000, Min = 0, Max = 10000 },
         FieldSchema.Bool("StealProtected", "Steal Protected"),
         new FieldSchema { Name = "RandomOptionGroup", Label = "Random Option Group", Kind = FieldKind.String },
         FieldSchema.Int("Index", "Index"),
@@ -31,8 +32,8 @@ public static class MobDbSchema
         Fields = new[]
         {
             new FieldSchema { Name = "Id", Label = "Mob ID", Kind = FieldKind.Int, IsKey = true, Group = GId },
-            new FieldSchema { Name = "AegisName", Label = "Aegis Name", Kind = FieldKind.String, Group = GId, Description = "Server name; also the client sprite name." },
-            new FieldSchema { Name = "Name", Label = "Name", Kind = FieldKind.String, IsDisplay = true, Group = GId },
+            new FieldSchema { Name = "AegisName", Label = "Aegis Name", Kind = FieldKind.String, Group = GId, Description = "Server name; also the client sprite name.", IsRequired = true, Unique = true, MaxLength = 24, MaxLengthSeverity = ValidationSeverity.Error },
+            new FieldSchema { Name = "Name", Label = "Name", Kind = FieldKind.String, IsDisplay = true, Group = GId, MaxLength = 24 },
             new FieldSchema { Name = "JapaneseName", Label = "Japanese Name", Kind = FieldKind.String, Group = GId },
             FieldSchema.Int("Level", "Level", group: GId),
 

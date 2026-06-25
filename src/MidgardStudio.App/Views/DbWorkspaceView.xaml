@@ -148,6 +148,11 @@
                                 Title="Info" Message="{Binding PortReportText}"
                                 IsOpen="{Binding PortReportText, Converter={StaticResource StringToBool}}" />
 
+                    <!-- Live validation issues for the selected record that aren't pinned to a visible field. -->
+                    <ui:InfoBar DockPanel.Dock="Top" Severity="Warning" IsClosable="False" Margin="0,0,0,8"
+                                Title="Validation" Message="{Binding Editor.RecordIssuesText}"
+                                IsOpen="{Binding Editor.HasRecordIssues}" />
+
                     <!-- Client sprite registration (mobs only) -->
                     <ui:CardExpander DockPanel.Dock="Bottom" Header="Client sprite" IsExpanded="True"
                                      Margin="0,8,0,0"

@@ -50,6 +50,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         _mode = settings.Settings.SaveMode;
         _intervalSeconds = settings.Settings.SaveIntervalSeconds;
         _backupRetention = settings.Settings.BackupRetention;
+        _saveGate = settings.Settings.SaveGate;
+        _validateBeforeSave = settings.Settings.ValidateOnSave;
 
         foreach (var (key, display, def) in AppSettingsService.ShortcutDefs)
         {
@@ -223,6 +225,30 @@ public sealed partial class SettingsViewModel : ObservableObject
         _settings.Settings.SaveIntervalSeconds = Math.Max(5, IntervalSeconds);
         _settings.Save();
         _onChanged();
+    }
+
+    // ===== Save validation gate =====
+
+    [ObservableProperty] private ValidationGateMode _saveGate;
+    [ObservableProperty] private bool _validateBeforeSave;
+
+    public bool IsGateAdvisory { get => SaveGate == ValidationGateMode.Advisory; set { if (value) SaveGate = ValidationGateMode.Advisory; } }
+    public bool IsGateSoft { get => SaveGate == ValidationGateMode.SoftGate; set { if (value) SaveGate = ValidationGateMode.SoftGate; } }
+    public bool IsGateHard { get => SaveGate == ValidationGateMode.HardGate; set { if (value) SaveGate = ValidationGateMode.HardGate; } }
+
+    partial void OnSaveGateChanged(ValidationGateMode value)
+    {
+        OnPropertyChanged(nameof(IsGateAdvisory));
+        OnPropertyChanged(nameof(IsGateSoft));
+        OnPropertyChanged(nameof(IsGateHard));
+        _settings.Settings.SaveGate = value;
+        _settings.Save();
+    }
+
+    partial void OnValidateBeforeSaveChanged(bool value)
+    {
+        _settings.Settings.ValidateOnSave = value;
+        _settings.Save();
     }
 }
 

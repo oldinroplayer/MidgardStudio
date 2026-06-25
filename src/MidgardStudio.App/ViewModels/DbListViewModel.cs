@@ -24,11 +24,13 @@ public sealed partial class DbListViewModel : ObservableObject
     private string? _sortColumn; // null = default (id ascending, no glyph); "Id"; "Name"
     private bool _sortAscending = true;
 
-    public DbListViewModel(OverlayTable table, Func<RecordKey, ImageSource?>? iconResolver = null)
+    public DbListViewModel(OverlayTable table, Func<RecordKey, ImageSource?>? iconResolver = null,
+        Func<RecordKey, bool>? include = null)
     {
         _table = table;
         _iconResolver = iconResolver;
         _all = table.Effective()
+            .Where(r => include is null || include(r.Key))
             .Select(r => new RecordRowViewModel(table, r.Key, iconResolver))
             .ToList();
         SortAll();

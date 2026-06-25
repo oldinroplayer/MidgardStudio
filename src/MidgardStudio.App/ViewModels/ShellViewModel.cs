@@ -26,6 +26,7 @@ public partial class ShellViewModel : ObservableObject
     private readonly ReferenceResolver _references;
     private readonly GrfBrowserViewModel _grfBrowser;
     private readonly ValidationViewModel _validation;
+    private readonly WorkspaceValidator _validator;
     private readonly ClientItemService _clientItems;
     private readonly GrfImageService _images;
     private readonly SpriteLinkService _sprite;
@@ -94,6 +95,7 @@ public partial class ShellViewModel : ObservableObject
     public ShellViewModel(IWorkspaceConfigService config, SchemaRegistry schemas, WorkspaceSession session,
         ReferenceResolver references, GrfBrowserViewModel grfBrowser, ClientItemService clientItems,
         GrfImageService images, SpriteLinkService sprite, MobSpriteService mobSprite, ValidationViewModel validation,
+        WorkspaceValidator validator,
         DropService drops, BackupService backups, MapCacheService mapCache, AppSettingsService appSettings,
         ConfigurationWizardViewModel wizard)
     {
@@ -103,6 +105,7 @@ public partial class ShellViewModel : ObservableObject
         _references = references;
         _grfBrowser = grfBrowser;
         _validation = validation;
+        _validator = validator;
         _clientItems = clientItems;
         _images = images;
         _sprite = sprite;
@@ -119,6 +122,7 @@ public partial class ShellViewModel : ObservableObject
         _editSaveTimer.Tick += (_, _) => { _editSaveTimer.Stop(); if (IsModified) DoSave(createBackup: false); };
         _wizard.OpenRequested += cfg => ApplyProfile(cfg);
         _wizard.CancelRequested += () => ShowWizard = false;
+        _validation.Navigate = NavigateToIssue;
 
         _session.Commands.Changed += OnCommandsChanged;
 
@@ -426,7 +430,7 @@ public partial class ShellViewModel : ObservableObject
     }
 
     [RelayCommand(CanExecute = nameof(CanSave))]
-    private void Save() => DoSave(createBackup: true, showSummary: true);
+    private void Save() => DoSave(createBackup: true, showSummary: true, gated: true);
 
     /// <summary>True when there are server or client edits not yet written to disk.</summary>
     public bool HasUnsavedChanges => _session.Commands.IsModified || _clientItems.IsDirty;
@@ -437,7 +441,7 @@ public partial class ShellViewModel : ObservableObject
     /// <summary>Writes pending changes. Returns false if the save failed (data is kept in the editor).
     /// Manual saves take a dated backup; auto-saves don't (to avoid spam). When <paramref name="showSummary"/>
     /// is set, a centered dialog reports what was written.</summary>
-    private bool DoSave(bool createBackup, bool showSummary = false)
+    private bool DoSave(bool createBackup, bool showSummary = false, bool gated = false)
     {
         // Capture what's about to change (id + import path) so the backup/summary can label themselves;
         // the dirty flags are cleared by SaveAll, so this must run first.
@@ -449,6 +453,10 @@ public partial class ShellViewModel : ObservableObject
             SaveCommand.NotifyCanExecuteChanged();
             return true;
         }
+
+        // Only a manual save is gated. Auto-save timers and exit-save pass gated:false and are never blocked.
+        if (gated && !RunSaveGate(saveTargets, clientDirty))
+            return false;
 
         try
         {
@@ -500,8 +508,52 @@ public partial class ShellViewModel : ObservableObject
     }
 
     /// <summary>Saves for an exiting window. Returns true if it's safe to close (saved or nothing pending).
-    /// No summary dialog here — the window is on its way out.</summary>
+    /// No summary dialog here — the window is on its way out, and exit-save is never gated.</summary>
     public bool SaveForExit() => DoSave(createBackup: true, showSummary: false);
+
+    /// <summary>The soft/hard save gate. If the databases about to be written contain Error-level validation
+    /// issues, prompts (soft gate) or blocks (hard gate). Returns true to proceed with the save. Validation
+    /// failures themselves never block a save.</summary>
+    private bool RunSaveGate(IReadOnlyList<(string Id, string ImportFilePath)> saveTargets, bool clientDirty)
+    {
+        var settings = _appSettings.Settings;
+        if (!settings.ValidateOnSave || settings.SaveGate == ValidationGateMode.Advisory)
+            return true;
+
+        var dbIds = saveTargets.Select(t => t.Id).ToList();
+        if (clientDirty && !dbIds.Contains("item_db")) dbIds.Add("item_db");
+        if (dbIds.Count == 0) return true;
+
+        MidgardStudio.Core.Validation.ValidationReport report;
+        try { report = _validator.ValidateDatabases(dbIds); }
+        catch { return true; }
+
+        if (!report.HasErrors) return true;
+
+        string message = BuildGateMessage(report);
+        if (settings.SaveGate == ValidationGateMode.HardGate)
+        {
+            Views.ConfirmDialog.Alert("Validation errors",
+                message + "\n\nFix these Error-level issues before saving (hard gate is enabled).");
+            return false;
+        }
+
+        return Views.ConfirmDialog.Show("Validation errors", message, yes: "Save anyway", no: "Fix first");
+    }
+
+    private static string BuildGateMessage(MidgardStudio.Core.Validation.ValidationReport report)
+    {
+        var errors = report.Issues
+            .Where(i => i.Severity == MidgardStudio.Core.Validation.ValidationSeverity.Error)
+            .ToList();
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"{errors.Count} error(s) were found in the entries you're about to save:");
+        sb.AppendLine();
+        foreach (var e in errors.Take(10))
+            sb.AppendLine($"•  [{e.DbId} #{e.Key}]  {e.Message}");
+        if (errors.Count > 10) sb.AppendLine($"…and {errors.Count - 10} more.");
+        return sb.ToString();
+    }
 
     [RelayCommand]
     private void OpenSettings()
@@ -684,6 +736,17 @@ public partial class ShellViewModel : ObservableObject
             workspace.SelectRow(key);
         else if (section.Key == "client_items")
             _clientItemsVm?.SelectRow(key);
+    }
+
+    /// <summary>Navigates to the record behind a validation issue, resolving the int/string key from the schema.</summary>
+    private void NavigateToIssue(string dbId, string key)
+    {
+        var schema = _schemas.Get(dbId);
+        if (schema is null) return;
+        RecordKey rk = schema.Key is MidgardStudio.Core.Schema.IntKeyStrategy && long.TryParse(key, out var n)
+            ? RecordKey.Of(n)
+            : RecordKey.Of(key);
+        NavigateTo(dbId, rk);
     }
 
     [RelayCommand]

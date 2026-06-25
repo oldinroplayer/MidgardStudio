@@ -149,6 +149,35 @@
                             <TextBlock Text="A dated snapshot is saved after every manual save and before every restore. Older snapshots beyond this count are pruned automatically. Manage them in Tools ▸ Backup Manager." Opacity="0.6" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0" />
                         </StackPanel>
                     </ui:Card>
+
+                    <ui:Card Padding="16,14" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Validation gate" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Opacity="0.6" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10"
+                                       Text="How a manual save reacts to Error-level validation issues in the entries you're about to write. Warnings and info never block. Auto-save and exit-save are never interrupted." />
+
+                            <CheckBox Content="Check validation before a manual save" IsChecked="{Binding ValidateBeforeSave}" Margin="0,0,0,6" />
+
+                            <RadioButton GroupName="Gate" IsChecked="{Binding IsGateSoft}" IsEnabled="{Binding ValidateBeforeSave}" Margin="0,4">
+                                <StackPanel>
+                                    <TextBlock Text="Soft gate" FontWeight="SemiBold" />
+                                    <TextBlock Text="Lists the errors and lets you Save anyway or stop to fix them. Recommended." Opacity="0.6" FontSize="12" />
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton GroupName="Gate" IsChecked="{Binding IsGateHard}" IsEnabled="{Binding ValidateBeforeSave}" Margin="0,4">
+                                <StackPanel>
+                                    <TextBlock Text="Hard gate" FontWeight="SemiBold" />
+                                    <TextBlock Text="Blocks a manual save until the Error-level issues are fixed." Opacity="0.6" FontSize="12" />
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton GroupName="Gate" IsChecked="{Binding IsGateAdvisory}" IsEnabled="{Binding ValidateBeforeSave}" Margin="0,4">
+                                <StackPanel>
+                                    <TextBlock Text="Advisory only" FontWeight="SemiBold" />
+                                    <TextBlock Text="Never inspects validation on save; issues appear only in the Validation panel and inline." Opacity="0.6" FontSize="12" />
+                                </StackPanel>
+                            </RadioButton>
+                        </StackPanel>
+                    </ui:Card>
                 </StackPanel>
             </ScrollViewer>
 

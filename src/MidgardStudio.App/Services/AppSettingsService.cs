@@ -15,11 +15,28 @@ public enum SaveMode
     OnEdit,
 }
 
+/// <summary>How strictly a manual save reacts to outstanding Error-level validation issues.</summary>
+public enum ValidationGateMode
+{
+    /// <summary>Saving never inspects validation (legacy behavior).</summary>
+    Advisory,
+    /// <summary>A manual save with errors shows a list and lets the user save anyway or stop to fix.</summary>
+    SoftGate,
+    /// <summary>A manual save is blocked until Error-level issues are fixed (warnings/info still allowed).</summary>
+    HardGate,
+}
+
 /// <summary>App-wide preferences (not tied to a server profile).</summary>
 public sealed class AppSettings
 {
     public SaveMode SaveMode { get; set; } = SaveMode.Manual;
     public int SaveIntervalSeconds { get; set; } = 60;
+
+    /// <summary>How a manual save reacts to outstanding Error-level validation issues.</summary>
+    public ValidationGateMode SaveGate { get; set; } = ValidationGateMode.SoftGate;
+
+    /// <summary>When false, the save gate is never run regardless of <see cref="SaveGate"/>.</summary>
+    public bool ValidateOnSave { get; set; } = true;
 
     /// <summary>User-overridden keyboard shortcuts, keyed by action (e.g. "Save" → "Ctrl+S").</summary>
     public Dictionary<string, string> Shortcuts { get; set; } = new();

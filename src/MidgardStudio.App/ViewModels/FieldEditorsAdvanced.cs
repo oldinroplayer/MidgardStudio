@@ -136,6 +136,7 @@ public sealed class ObjectFieldEditorViewModel : FieldEditorViewModel
         int i => i == (def is int di ? di : 0),
         long l => l == (def is long dl ? dl : def is int di2 ? di2 : 0L),
         string s => string.IsNullOrEmpty(s),
+        MidgardStudio.Core.Model.LevelList ll => ll.IsEmpty,
         _ => false,
     };
 }
@@ -205,6 +206,7 @@ public sealed class ObjectRowViewModel : ObservableObject
         int i => i == (def is int di ? di : 0),
         long l => l == (def is long dl ? dl : def is int di2 ? di2 : 0L),
         string s => string.IsNullOrEmpty(s),
+        MidgardStudio.Core.Model.LevelList ll => ll.IsEmpty,
         _ => false,
     };
 }

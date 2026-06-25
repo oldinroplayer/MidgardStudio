@@ -321,7 +321,8 @@ public sealed partial class ClientItemsViewModel : ObservableObject, IDisposable
         _overlay = modeSet.For(_session.Mode);
 
         var list = new DbListViewModel(_overlay,
-            key => _images.ItemIcon(_clientItems.GetOrCreate((int)key.AsInt).IdentifiedResourceName));
+            key => _images.ItemIcon(_clientItems.GetOrCreate((int)key.AsInt).IdentifiedResourceName),
+            key => _clientItems.Exists((int)key.AsInt)); // only ids that actually have a client entry
         list.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(DbListViewModel.SelectedRow)) return;

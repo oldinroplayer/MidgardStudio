@@ -6,6 +6,7 @@ using MidgardStudio.Core.Lookup;
 using MidgardStudio.Core.Model;
 using MidgardStudio.Core.Overlay;
 using MidgardStudio.Core.Serialization;
+using MidgardStudio.Core.Validation;
 
 namespace MidgardStudio.App.ViewModels;
 
@@ -21,17 +22,24 @@ public sealed partial class RecordEditorViewModel : ObservableObject
     private readonly IReferenceResolver? _references;
     private readonly ScriptCommandCatalog? _catalog;
     private readonly Core.Workspace.ServerMode _mode;
+    private readonly ValidationEngine? _validator;
+    // Live editing validates one record against the in-record rules (enum/bounds/required/length/
+    // consistency). Cross-database reference resolution is deliberately skipped here (empty index) —
+    // it would force the reference cache to build mid-keystroke; the full panel scan covers it.
+    private readonly InMemoryReferenceIndex _liveRefs = new();
     private RecordKey _key;
 
     public RecordEditorViewModel(OverlayTable table, EditCommandStack stack,
         IReferenceResolver? references = null, ScriptCommandCatalog? catalog = null,
-        Core.Workspace.ServerMode mode = Core.Workspace.ServerMode.Renewal)
+        Core.Workspace.ServerMode mode = Core.Workspace.ServerMode.Renewal,
+        ValidationEngine? validator = null)
     {
         _table = table;
         _stack = stack;
         _references = references;
         _catalog = catalog;
         _mode = mode;
+        _validator = validator;
     }
 
     public ObservableCollection<FieldGroupViewModel> Groups { get; } = new();
@@ -55,6 +63,13 @@ public sealed partial class RecordEditorViewModel : ObservableObject
     [ObservableProperty]
     private string _yamlPreview = string.Empty;
 
+    /// <summary>Combined text of issues not pinned to a visible field (nested / record-level), for the banner.</summary>
+    [ObservableProperty]
+    private string _recordIssuesText = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasRecordIssues;
+
     /// <summary>Raised when the record's effective content changes (so the list row can refresh).</summary>
     public event Action? RecordChanged;
 
@@ -73,6 +88,8 @@ public sealed partial class RecordEditorViewModel : ObservableObject
         HasRecord = false;
         Title = string.Empty;
         YamlPreview = string.Empty;
+        RecordIssuesText = string.Empty;
+        HasRecordIssues = false;
     }
 
     [RelayCommand]
@@ -164,6 +181,7 @@ public sealed partial class RecordEditorViewModel : ObservableObject
 
         UpdatePreview(record);
         _applicableSignature = ApplicableSignature(record);
+        RunValidation(record);
     }
 
     /// <summary>
@@ -191,10 +209,55 @@ public sealed partial class RecordEditorViewModel : ObservableObject
         var record = _table.GetEffective(_key);
         if (record is not null)
         {
-            if (ApplicableSignature(record) != _applicableSignature) Build(); // conditional fields changed
-            else UpdatePreview(record);
+            if (ApplicableSignature(record) != _applicableSignature)
+            {
+                Build(); // conditional fields changed (Build re-validates)
+            }
+            else
+            {
+                UpdatePreview(record);
+                RunValidation(record);
+            }
         }
         RecordChanged?.Invoke();
+    }
+
+    /// <summary>Validates the current record and maps findings onto the field editors (red/amber chrome)
+    /// plus a record-level banner for issues not pinned to a visible field.</summary>
+    private void RunValidation(DbRecord record)
+    {
+        if (_validator is null) return;
+
+        var ctx = ValidationContext.Create(_liveRefs, _mode);
+        var byField = new Dictionary<string, (string Message, ValidationSeverity Severity)>(StringComparer.Ordinal);
+        var recordLevel = new List<ValidationIssue>();
+
+        foreach (var issue in _validator.ValidateRecord(record, _table, ctx))
+        {
+            if (issue.Field is { } f)
+            {
+                if (!byField.TryGetValue(f, out var existing) || issue.Severity > existing.Severity)
+                    byField[f] = (issue.Message, issue.Severity);
+            }
+            else recordLevel.Add(issue);
+        }
+
+        var visible = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var group in Groups)
+            foreach (var vm in group.Fields)
+            {
+                visible.Add(vm.FieldName);
+                if (byField.TryGetValue(vm.FieldName, out var hit)) vm.SetIssue(hit.Message, hit.Severity);
+                else vm.SetIssue(null, null);
+            }
+
+        var lines = new List<string>();
+        foreach (var issue in recordLevel) lines.Add(issue.Message);
+        foreach (var kv in byField)
+            if (!visible.Contains(kv.Key)) lines.Add(kv.Value.Message);
+
+        RecordIssuesText = string.Join("\n", lines);
+        HasRecordIssues = lines.Count > 0;
     }
 
     private void UpdatePreview(DbRecord record)

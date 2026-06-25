@@ -58,6 +58,10 @@ public sealed class LevelList
         return result;
     }
 
+    /// <summary>Human/display form, used wherever the value is interpolated into text (e.g. an object
+    /// summary). Without this, a LevelList prints its fully-qualified type name.</summary>
+    public override string ToString() => ToCompactString();
+
     /// <summary>scalar → "5"; per-level → "1:3, 2:5"; empty → "".</summary>
     public string ToCompactString()
     {

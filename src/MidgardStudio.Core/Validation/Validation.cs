@@ -1,5 +1,6 @@
 using MidgardStudio.Core.Model;
 using MidgardStudio.Core.Overlay;
+using MidgardStudio.Core.Workspace;
 
 namespace MidgardStudio.Core.Validation;
 
@@ -10,64 +11,52 @@ public enum ValidationSeverity
     Error,
 }
 
-/// <summary>A single advisory finding. Never blocks editing or saving.</summary>
+/// <summary>How much of an overlay to validate.</summary>
+public enum ValidationScope
+{
+    /// <summary>Only authored entries (overrides and new customs). The server's base data is not the user's concern.</summary>
+    CustomOnly,
+
+    /// <summary>Every effective record, including the read-only base bundle.</summary>
+    FullScan,
+}
+
+/// <summary>
+/// A single validation finding. The first five members are positional for backwards compatibility
+/// (existing call sites and XAML bindings). <see cref="RuleId"/>, <see cref="Mode"/> and
+/// <see cref="Fix"/> are optional enrichments.
+/// </summary>
 public sealed record ValidationIssue(
     ValidationSeverity Severity,
     string DbId,
     string Key,
     string? Field,
-    string Message);
-
-/// <summary>Validates one database's overlay, producing advisory issues.</summary>
-public interface IDbValidator
+    string Message)
 {
-    string DbId { get; }
+    /// <summary>Stable identifier for the rule that produced this issue, e.g. "MOB.ID_RANGE".
+    /// Used for grouping, suppression, and assertion-stable tests.</summary>
+    public string? RuleId { get; init; }
 
-    IEnumerable<ValidationIssue> Validate(OverlayTable table);
+    /// <summary>The server mode this finding applies to (null = both / mode-agnostic).</summary>
+    public ServerMode? Mode { get; init; }
+
+    /// <summary>An optional one-click remedy.</summary>
+    public QuickFix? Fix { get; init; }
 }
 
-/// <summary>Aggregates per-database validators and runs the matching one against an overlay.</summary>
-public sealed class ValidationService
+/// <summary>Validates a single record (the common case — enum, bounds, references, …). Cheap enough
+/// to run live as the user edits one record.</summary>
+public interface IRecordValidator
 {
-    private readonly Dictionary<string, IDbValidator> _validators = new(StringComparer.Ordinal);
+    bool AppliesTo(string dbId);
 
-    public ValidationService Register(IDbValidator validator)
-    {
-        _validators[validator.DbId] = validator;
-        return this;
-    }
-
-    public IReadOnlyList<ValidationIssue> Validate(OverlayTable table)
-    {
-        if (_validators.TryGetValue(table.Schema.Id, out var validator))
-            return validator.Validate(table).ToList();
-        return Array.Empty<ValidationIssue>();
-    }
+    IEnumerable<ValidationIssue> Validate(DbRecord record, OverlayTable table, ValidationContext context);
 }
 
-/// <summary>Baseline item checks: required identity fields on authored (custom/overridden) entries.
-/// Richer cross-file rules are added in the cross-file validator (Phase 11).</summary>
-public sealed class ItemValidator : IDbValidator
+/// <summary>Validates a whole overlay at once (cross-record rules such as duplicate AegisName).</summary>
+public interface IOverlayValidator
 {
-    public string DbId => "item_db";
+    bool AppliesTo(string dbId);
 
-    public IEnumerable<ValidationIssue> Validate(OverlayTable table)
-    {
-        foreach (var record in table.Effective())
-        {
-            if (record.Origin == RecordOrigin.Base)
-                continue; // core data is not the user's concern
-
-            string key = record.Key.ToString();
-
-            if (string.IsNullOrWhiteSpace(record.GetString("AegisName")))
-                yield return new ValidationIssue(ValidationSeverity.Error, DbId, key, "AegisName", "Aegis Name is required.");
-
-            if (string.IsNullOrWhiteSpace(record.GetString("Name")))
-                yield return new ValidationIssue(ValidationSeverity.Warning, DbId, key, "Name", "Display Name is empty.");
-
-            if (string.IsNullOrWhiteSpace(record.GetString("Type")))
-                yield return new ValidationIssue(ValidationSeverity.Warning, DbId, key, "Type", "Type is not set (defaults to Etc).");
-        }
-    }
+    IEnumerable<ValidationIssue> Validate(OverlayTable table, ValidationScope scope, ValidationContext context);
 }

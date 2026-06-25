@@ -28,6 +28,29 @@ public sealed class SpriteLinkService
 
     public bool IsAvailable => File.Exists(AccIdPath) && File.Exists(AccNamePath);
 
+    /// <summary>True when an ACCESSORY_IDs constant is mapped to this View id in accessoryid.lub (validation).</summary>
+    public bool HasView(int viewId)
+    {
+        if (!File.Exists(AccIdPath)) return false;
+        try { return AccessoryTables.ReadConstants(_codec.ReadText(AccIdPath)).Values.Contains(viewId); }
+        catch { return false; }
+    }
+
+    /// <summary>The sprite file mapped to a View id (via accessoryid.lub + accname.lub), or null.</summary>
+    public string? SpriteForView(int viewId)
+    {
+        if (!IsAvailable) return null;
+        try
+        {
+            var constants = AccessoryTables.ReadConstants(_codec.ReadText(AccIdPath));
+            string? constName = constants.FirstOrDefault(kv => kv.Value == viewId).Key;
+            if (constName is null) return null;
+            var names = AccessoryTables.ReadNames(_codec.ReadText(AccNamePath), "AccNameTable");
+            return names.GetValueOrDefault(constName);
+        }
+        catch { return null; }
+    }
+
     public SpriteLinkResult LinkAccessory(string aegisName, string spriteFile)
     {
         string idText = _codec.ReadText(AccIdPath);

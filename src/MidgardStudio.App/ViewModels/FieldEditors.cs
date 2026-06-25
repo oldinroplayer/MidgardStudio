@@ -74,6 +74,37 @@ public abstract class FieldEditorViewModel : ObservableObject
     }
 
     protected void RaiseChanged() => Changed?.Invoke();
+
+    // ---- live validation state (set by the record editor; bound by the field template) ----
+
+    private string? _issueMessage;
+    private MidgardStudio.Core.Validation.ValidationSeverity? _issueSeverity;
+
+    /// <summary>The current validation message for this field (tooltip), or null when valid.</summary>
+    public string? IssueMessage
+    {
+        get => _issueMessage;
+        private set
+        {
+            if (SetProperty(ref _issueMessage, value))
+            {
+                OnPropertyChanged(nameof(HasIssue));
+                OnPropertyChanged(nameof(HasError));
+                OnPropertyChanged(nameof(HasWarning));
+            }
+        }
+    }
+
+    public bool HasIssue => _issueMessage is not null;
+    public bool HasError => _issueSeverity == MidgardStudio.Core.Validation.ValidationSeverity.Error;
+    public bool HasWarning => _issueSeverity == MidgardStudio.Core.Validation.ValidationSeverity.Warning;
+
+    /// <summary>Applies (or clears) the live validation finding for this field.</summary>
+    public void SetIssue(string? message, MidgardStudio.Core.Validation.ValidationSeverity? severity)
+    {
+        _issueSeverity = message is null ? null : severity;
+        IssueMessage = message;
+    }
 }
 
 public sealed class StringFieldEditorViewModel : FieldEditorViewModel

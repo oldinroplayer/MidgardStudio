@@ -1,4 +1,5 @@
 using MidgardStudio.Core.Schema;
+using MidgardStudio.Core.Validation;
 
 namespace MidgardStudio.Core.Schemas;
 
@@ -13,7 +14,7 @@ public static class PetDbSchema
 
     private static readonly DbSchema Evolution = DbSchema.Nested("PetEvolution", new[]
     {
-        new FieldSchema { Name = "Target", Label = "Target Mob", Kind = FieldKind.Reference, Enum = EnumSource.Reference("EvoTarget", "mob_db") },
+        new FieldSchema { Name = "Target", Label = "Target Mob", Kind = FieldKind.Reference, Enum = EnumSource.Reference("EvoTarget", "mob_db"), ReferenceSeverity = ValidationSeverity.Error },
         FieldSchema.ObjectListField("ItemRequirements", "Item Requirements", ItemReq),
     });
 
@@ -27,11 +28,11 @@ public static class PetDbSchema
         Layout = FileLayout.Standard("pet_db.yml"),
         Fields = new[]
         {
-            new FieldSchema { Name = "Mob", Label = "Mob", Kind = FieldKind.Reference, IsKey = true, IsDisplay = true, Enum = EnumSource.Reference("PetMob", "mob_db"), Group = "General" },
-            new FieldSchema { Name = "TameItem", Label = "Tame Item", Kind = FieldKind.Reference, Enum = EnumSource.Reference("TameItem", "item_db"), Group = "General" },
-            new FieldSchema { Name = "EggItem", Label = "Egg Item", Kind = FieldKind.Reference, Enum = EnumSource.Reference("EggItem", "item_db"), Group = "General" },
-            new FieldSchema { Name = "EquipItem", Label = "Equip Item", Kind = FieldKind.Reference, Enum = EnumSource.Reference("EquipItem", "item_db"), Group = "General" },
-            new FieldSchema { Name = "FoodItem", Label = "Food Item", Kind = FieldKind.Reference, Enum = EnumSource.Reference("FoodItem", "item_db"), Group = "General" },
+            new FieldSchema { Name = "Mob", Label = "Mob", Kind = FieldKind.Reference, IsKey = true, IsDisplay = true, Enum = EnumSource.Reference("PetMob", "mob_db"), Group = "General", ReferenceSeverity = ValidationSeverity.Error },
+            new FieldSchema { Name = "TameItem", Label = "Tame Item", Kind = FieldKind.Reference, Enum = EnumSource.Reference("TameItem", "item_db"), Group = "General", ReferenceSeverity = ValidationSeverity.Error },
+            new FieldSchema { Name = "EggItem", Label = "Egg Item", Kind = FieldKind.Reference, Enum = EnumSource.Reference("EggItem", "item_db"), Group = "General", ReferenceSeverity = ValidationSeverity.Error },
+            new FieldSchema { Name = "EquipItem", Label = "Equip Item", Kind = FieldKind.Reference, Enum = EnumSource.Reference("EquipItem", "item_db"), Group = "General", ReferenceSeverity = ValidationSeverity.Error },
+            new FieldSchema { Name = "FoodItem", Label = "Food Item", Kind = FieldKind.Reference, Enum = EnumSource.Reference("FoodItem", "item_db"), Group = "General", ReferenceSeverity = ValidationSeverity.Error },
             FieldSchema.Int("Fullness", "Fullness", group: "Intimacy"),
             FieldSchema.Int("HungryDelay", "Hungry Delay", 60, "Intimacy"),
             FieldSchema.Int("HungerIncrease", "Hunger Increase", 20, "Intimacy"),
@@ -78,7 +79,7 @@ public static class AbraDbSchema
         },
         Fields = new[]
         {
-            new FieldSchema { Name = "Skill", Label = "Skill", Kind = FieldKind.Reference, IsKey = true, IsDisplay = true, Enum = EnumSource.Reference("AbraSkill", "skill_db") },
+            new FieldSchema { Name = "Skill", Label = "Skill", Kind = FieldKind.Reference, IsKey = true, IsDisplay = true, Enum = EnumSource.Reference("AbraSkill", "skill_db"), ReferenceSeverity = ValidationSeverity.Error },
             FieldSchema.ObjectListField("Probability", "Probability (per level)", ProbabilityRow),
         },
     };

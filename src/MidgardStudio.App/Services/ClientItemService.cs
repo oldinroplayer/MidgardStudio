@@ -71,6 +71,12 @@ public sealed class ClientItemService
 
     public bool Has(int id) => ClientFile.Custom.ContainsKey(id) || ClientFile.Override.ContainsKey(id) || Official.Contains(id);
 
+    /// <summary>True only when an entry actually exists in the client lua files (custom, override, or the
+    /// base itemInfo.lua) — unlike <see cref="GetOrCreate"/>, this never fabricates a blank entry. This is
+    /// the source of truth for "this item exists in Client Items" (list membership, navigation, validation).</summary>
+    public bool Exists(int id) =>
+        ClientFile.Custom.ContainsKey(id) || ClientFile.Override.ContainsKey(id) || Official.Contains(id);
+
     public ItemInfoEntry GetOrCreate(int id)
     {
         if (ClientFile.Custom.TryGetValue(id, out var c)) return c;

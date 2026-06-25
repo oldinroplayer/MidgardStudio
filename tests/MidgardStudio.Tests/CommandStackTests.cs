@@ -1,8 +1,10 @@
 using MidgardStudio.Core.Commands;
+using MidgardStudio.Core.Lookup;
 using MidgardStudio.Core.Model;
 using MidgardStudio.Core.Overlay;
 using MidgardStudio.Core.Schemas;
 using MidgardStudio.Core.Validation;
+using MidgardStudio.Core.Workspace;
 
 namespace MidgardStudio.Tests;
 
@@ -98,7 +100,8 @@ public class CommandStackTests
         importLayer.Add(bad);
 
         var overlay = new OverlayTable(schema, new DbLayer(), importLayer, "x.yml");
-        var issues = new ValidationService().Register(new ItemValidator()).Validate(overlay);
+        var ctx = ValidationContext.Create(new InMemoryReferenceIndex(), ServerMode.Renewal);
+        var issues = ValidationEngine.CreateDefault().ValidateOverlay(overlay, ValidationScope.CustomOnly, ctx).ToList();
 
         Assert.Contains(issues, i => i.Field == "AegisName" && i.Severity == ValidationSeverity.Error);
     }

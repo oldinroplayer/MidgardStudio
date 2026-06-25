@@ -1,4 +1,5 @@
 using MidgardStudio.Core.Model;
+using MidgardStudio.Core.Validation;
 
 namespace MidgardStudio.Core.Schema;
 
@@ -59,6 +60,26 @@ public sealed class FieldSchema
         if (Max is { } max && value > max) return max;
         return value;
     }
+
+    // ---- validation metadata (all default-off; consumed by the validation engine) ----
+
+    /// <summary>When set, an empty value yields a <see cref="RequiredSeverity"/> issue.</summary>
+    public bool IsRequired { get; init; }
+
+    public ValidationSeverity RequiredSeverity { get; init; } = ValidationSeverity.Error;
+
+    /// <summary>Maximum character length for String/Enum/Reference fields (e.g. AegisName ≤ 49).</summary>
+    public int? MaxLength { get; init; }
+
+    public ValidationSeverity MaxLengthSeverity { get; init; } = ValidationSeverity.Warning;
+
+    /// <summary>When true, the value must be unique across the database (case-insensitive). Used for
+    /// AegisName, which is unique but is not the record key.</summary>
+    public bool Unique { get; init; }
+
+    /// <summary>Severity for an unresolved cross-database reference. Defaults to Warning (rAthena
+    /// silently skips, e.g. a missing drop item); set to Error where the record is rejected (alias, etc.).</summary>
+    public ValidationSeverity ReferenceSeverity { get; init; } = ValidationSeverity.Warning;
 
     /// <summary>Optional conditional visibility (e.g. WeaponLevel only for Type == Weapon).</summary>
     public Func<DbRecord, bool>? IsApplicable { get; init; }

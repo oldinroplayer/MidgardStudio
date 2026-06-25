@@ -87,7 +87,8 @@ public partial class App : Application
         services.AddSingleton<Services.BackupService>();
         services.AddSingleton<Services.MapCacheService>();
         services.AddSingleton<Services.AppSettingsService>();
-        services.AddSingleton<Services.CrossFileValidator>();
+        services.AddSingleton<Services.ReferenceIndex>();
+        services.AddSingleton<Services.WorkspaceValidator>();
         services.AddSingleton<GrfBrowserViewModel>();
         services.AddSingleton<ValidationViewModel>();
         services.AddSingleton<ConfigurationWizardViewModel>();

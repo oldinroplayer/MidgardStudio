@@ -32,6 +32,10 @@ public sealed class OverlayTable
 
     public int ImportCount => _import.Records.Count;
 
+    /// <summary>The read-only base (official) records. These are authoritative — any value rAthena's own
+    /// data uses is valid by definition, so the validator derives its enum/flag whitelist from them.</summary>
+    public IEnumerable<DbRecord> BaseRecords() => _base.Records;
+
     public bool IsDirty => _importDirty || _import.Records.Any(r => r.IsDirty);
 
     public DbRecord? GetEffective(RecordKey key) =>
