@@ -247,7 +247,8 @@ public partial class ShellViewModel : ObservableObject
 
         if (section?.Key == "client_items")
         {
-            _clientItemsVm ??= new ClientItemsViewModel(_session, _clientItems, _images, _sprite, _appSettings, _schemas.Get("item_db")!);
+            _clientItemsVm ??= new ClientItemsViewModel(_session, _clientItems, _images, _sprite, _appSettings,
+                _schemas.Get("item_db")!, NavigateTo, SyncItemsWorkspace);
             CurrentContent = _clientItemsVm;
             _ = _clientItemsVm.EnsureLoadedAsync();
             return;
@@ -409,11 +410,19 @@ public partial class ShellViewModel : ObservableObject
     {
         foreach (var workspace in _workspaces.Values) workspace.Dispose();
         _workspaces.Clear();
+        _clientItemsVm?.Dispose();
         _clientItemsVm = null; // rebuilt against the new mode/profile on next visit
         _comboVm?.Dispose();
         _comboVm = null;
         _forgeVm = null;
         _mapCacheVm = null;
+    }
+
+    /// <summary>Re-syncs the server Items list with the overlay (used after Client Items mutates the shared
+    /// item data, so both lists stay consistent).</summary>
+    private void SyncItemsWorkspace()
+    {
+        if (_workspaces.TryGetValue("item_db", out var ws)) ws.List?.SyncWithOverlay();
     }
 
     [RelayCommand(CanExecute = nameof(CanSave))]

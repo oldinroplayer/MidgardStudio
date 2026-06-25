@@ -163,6 +163,7 @@ public sealed partial class RecordEditorViewModel : ObservableObject
         }
 
         UpdatePreview(record);
+        _applicableSignature = ApplicableSignature(record);
     }
 
     /// <summary>
@@ -176,10 +177,23 @@ public sealed partial class RecordEditorViewModel : ObservableObject
         _ => true,
     };
 
+    private string _applicableSignature = string.Empty;
+
+    /// <summary>The set of fields the form currently shows (so a change that reveals/hides a conditional
+    /// field — e.g. setting Type=Weapon reveals SubType / Weapon Level — triggers a rebuild).</summary>
+    private string ApplicableSignature(DbRecord record) =>
+        string.Join(",", record.Schema.Fields
+            .Where(f => !f.HideInForm && InActiveSystem(f) && (f.IsApplicable?.Invoke(record) ?? true))
+            .Select(f => f.Name));
+
     private void OnFieldChanged()
     {
         var record = _table.GetEffective(_key);
-        if (record is not null) UpdatePreview(record);
+        if (record is not null)
+        {
+            if (ApplicableSignature(record) != _applicableSignature) Build(); // conditional fields changed
+            else UpdatePreview(record);
+        }
         RecordChanged?.Invoke();
     }
 

@@ -20,7 +20,7 @@ namespace MidgardStudio.App.ViewModels;
 /// detail panel edits the client itemInfo (display/resource/description names, slots, ClassNum, costume,
 /// headgear sprite + icon) read from itemInfo.lua / itemInfo_C.lua.
 /// </summary>
-public sealed partial class ClientItemsViewModel : ObservableObject
+public sealed partial class ClientItemsViewModel : ObservableObject, IDisposable
 {
     private readonly WorkspaceSession _session;
     private readonly ClientItemService _clientItems;
@@ -28,10 +28,13 @@ public sealed partial class ClientItemsViewModel : ObservableObject
     private readonly SpriteLinkService _sprite;
     private readonly AppSettingsService _settings;
     private readonly DbSchema _itemSchema;
+    private readonly Action<string, RecordKey>? _navigate;
+    private readonly Action? _syncItems;
     private OverlayTable? _overlay;
 
     public ClientItemsViewModel(WorkspaceSession session, ClientItemService clientItems, GrfImageService images,
-        SpriteLinkService sprite, AppSettingsService settings, DbSchema itemSchema)
+        SpriteLinkService sprite, AppSettingsService settings, DbSchema itemSchema,
+        Action<string, RecordKey>? navigate = null, Action? syncItems = null)
     {
         _session = session;
         _clientItems = clientItems;
@@ -39,7 +42,25 @@ public sealed partial class ClientItemsViewModel : ObservableObject
         _sprite = sprite;
         _settings = settings;
         _itemSchema = itemSchema;
+        _navigate = navigate;
+        _syncItems = syncItems;
+        _session.Commands.UndoRedoPerformed += OnUndoRedo;
     }
+
+    private DbSchema Schema => _itemSchema;
+
+    private void OnUndoRedo()
+    {
+        List?.SyncWithOverlay();
+        RefreshEditor();
+        OnPropertyChanged(nameof(CanRestore));
+    }
+
+    public void Dispose() => _session.Commands.UndoRedoPerformed -= OnUndoRedo;
+
+    /// <summary>True when the selected row is an override of a base entry (so it can be reverted).</summary>
+    public bool CanRestore =>
+        _overlay is not null && List?.SelectedRow is { } r && _overlay.OriginOf(r.Key) == RecordOrigin.Overridden;
 
     [ObservableProperty]
     private bool _isLoading = true;
@@ -122,6 +143,175 @@ public sealed partial class ClientItemsViewModel : ObservableObject
         return _skill;
     }
 
+    // ===== Record actions (shared item overlay — mirror the Items list) =====
+
+    [RelayCommand]
+    private void AddCustom()
+    {
+        if (_overlay is null || List is null || Schema.KeyField is not { } keyField) return;
+
+        var record = new DbRecord(Schema);
+        if (keyField.Kind == FieldKind.Int)
+        {
+            if (PromptId($"New {Schema.DisplayName} entry", "ID", NextFreeId(keyField.Name)) is not { } id) return;
+            if (_overlay.GetEffective(RecordKey.Of(id)) is not null) return;
+            record.SetRaw(keyField.Name, id);
+        }
+        else record.SetRaw(keyField.Name, UniqueStringKey(keyField.Name));
+
+        if (Schema.Field("AegisName") is not null) record.SetRaw("AegisName", $"Custom_{record.Key}");
+        if (Schema.DisplayField is { Kind: FieldKind.String } display && !record.Has(display.Name))
+            record.SetRaw(display.Name, $"Custom {Schema.DisplayName}");
+
+        _session.Commands.Execute(new AddRecordCommand(_overlay, record));
+
+        // Seed a matching client-text entry so the new item is cross-file from the start.
+        int newId = record.GetInt(keyField.Name);
+        var entry = _clientItems.GetOrCreate(newId);
+        entry.IdentifiedDisplayName = record.GetString("Name") ?? string.Empty;
+        entry.SlotCount = record.GetInt("Slots");
+        entry.ClassNum = record.GetInt("View");
+        _clientItems.Upsert(entry);
+
+        var row = List.CreateRow(record.Key);
+        List.AddRow(row);
+        List.SelectedRow = row;
+        _syncItems?.Invoke();
+    }
+
+    [RelayCommand]
+    private void Duplicate()
+    {
+        if (_overlay is null || List?.SelectedRow is not { } sel || Schema.KeyField is not { } keyField) return;
+
+        var clone = sel.Record.DeepClone();
+        if (keyField.Kind == FieldKind.Int) clone.SetRaw(keyField.Name, NextFreeId(keyField.Name));
+        else clone.SetRaw(keyField.Name, UniqueStringKey(keyField.Name));
+        if (Schema.Field("AegisName") is not null) clone.SetRaw("AegisName", $"Custom_{clone.Key}");
+
+        _session.Commands.Execute(new AddRecordCommand(_overlay, clone));
+        var row = List.CreateRow(clone.Key);
+        List.AddRow(row);
+        List.SelectedRow = row;
+        _syncItems?.Invoke();
+    }
+
+    [RelayCommand]
+    private void DeleteEntry()
+    {
+        if (_overlay is null || List?.SelectedRow is not { } row) return;
+        if (_overlay.OriginOf(row.Key) == RecordOrigin.Base) return; // base entries are read-only
+        if (_overlay.GetEffective(row.Key) is not { } import) return;
+        _session.Commands.Execute(new RemoveImportCommand(_overlay, import));
+        List.SyncWithOverlay();
+        _syncItems?.Invoke();
+    }
+
+    [RelayCommand]
+    private void RestoreToDefault()
+    {
+        if (_overlay is null || List?.SelectedRow is not { } row) return;
+        if (_overlay.OriginOf(row.Key) != RecordOrigin.Overridden) return;
+        if (_overlay.GetEffective(row.Key) is not { } import) return;
+        if (!Views.ConfirmDialog.Show("Restore to default",
+                $"Restore #{row.Key} to its default (base) values?\nYour customizations for this entry will be discarded.",
+                yes: "Restore")) return;
+        _session.Commands.Execute(new RemoveImportCommand(_overlay, import));
+        List.SyncWithOverlay();
+        _syncItems?.Invoke();
+    }
+
+    [RelayCommand]
+    private void ChangeId()
+    {
+        if (_overlay is null || List?.SelectedRow is not { } row || Schema.KeyField is not { Kind: FieldKind.Int } keyField) return;
+        if (_overlay.OriginOf(row.Key) != RecordOrigin.NewCustom) return;
+
+        int current = (int)row.Key.AsInt;
+        if (PromptId("Change ID", "New ID", current) is not { } newId || newId == current) return;
+        if (_overlay.GetEffective(RecordKey.Of(newId)) is not null) return;
+
+        var clone = _overlay.GetEffective(row.Key)!.DeepClone();
+        clone.SetRaw(keyField.Name, newId);
+        using (_session.Commands.BeginBatch("Change ID"))
+        {
+            _session.Commands.Execute(new RemoveImportCommand(_overlay, _overlay.GetEffective(row.Key)!));
+            _session.Commands.Execute(new AddRecordCommand(_overlay, clone));
+        }
+        List.SyncWithOverlay();
+        List.SelectByKey(clone.Key);
+        _syncItems?.Invoke();
+    }
+
+    [RelayCommand]
+    private void CopyToId()
+    {
+        if (_overlay is null || List?.SelectedRow is not { } row || Schema.KeyField is not { Kind: FieldKind.Int } keyField) return;
+
+        if (PromptId("Copy to ID", "Target ID", NextFreeId(keyField.Name)) is not { } newId) return;
+        if (_overlay.GetEffective(RecordKey.Of(newId)) is not null) return;
+
+        var clone = _overlay.GetEffective(row.Key)!.DeepClone();
+        clone.SetRaw(keyField.Name, newId);
+        if (Schema.Field("AegisName") is not null) clone.SetRaw("AegisName", $"Custom_{newId}");
+        _session.Commands.Execute(new AddRecordCommand(_overlay, clone));
+        List.AddRow(List.CreateRow(clone.Key));
+        List.SelectByKey(clone.Key);
+        _syncItems?.Invoke();
+    }
+
+    /// <summary>Copies the selected entry — or every selected entry — as YAML to the clipboard.</summary>
+    [RelayCommand]
+    private void CopyEntry()
+    {
+        var records = SelectedRecords();
+        if (records.Count == 0) return;
+        var yaml = new Core.Serialization.YamlDbWriter().WriteToString(Schema, records);
+        try { System.Windows.Clipboard.SetText(yaml); } catch { /* clipboard busy */ }
+    }
+
+    private List<DbRecord> SelectedRecords()
+    {
+        if (List is null) return new List<DbRecord>();
+        if (List.SelectedRows.Count > 1)
+        {
+            var set = new HashSet<RecordRowViewModel>(List.SelectedRows);
+            return List.Rows.Where(set.Contains).Select(r => r.Record).ToList();
+        }
+        return List.SelectedRow is { } row ? new List<DbRecord> { row.Record } : new List<DbRecord>();
+    }
+
+    /// <summary>Jumps to the server Items section for the selected item.</summary>
+    [RelayCommand]
+    private void SelectInItems()
+    {
+        if (List?.SelectedRow is { } row) _navigate?.Invoke("item_db", row.Key);
+    }
+
+    private static int? PromptId(string title, string prompt, int initial)
+    {
+        var dlg = new Views.IdInputDialog(title, prompt, initial) { Owner = System.Windows.Application.Current.MainWindow };
+        return dlg.ShowDialog() == true ? dlg.Value : null;
+    }
+
+    private int NextFreeId(string keyField)
+    {
+        var used = new HashSet<int>();
+        foreach (var r in _overlay!.Effective()) used.Add(r.GetInt(keyField));
+        int id = 30000;
+        while (used.Contains(id)) id++;
+        return id;
+    }
+
+    private string UniqueStringKey(string keyField)
+    {
+        int n = 1;
+        string candidate;
+        do { candidate = $"CUSTOM_{n++}"; }
+        while (_overlay!.Effective().Any(r => string.Equals(r.GetString(keyField), candidate, StringComparison.OrdinalIgnoreCase)));
+        return candidate;
+    }
+
     public async Task EnsureLoadedAsync()
     {
         if (_overlay is not null) return;
@@ -134,10 +324,11 @@ public sealed partial class ClientItemsViewModel : ObservableObject
             key => _images.ItemIcon(_clientItems.GetOrCreate((int)key.AsInt).IdentifiedResourceName));
         list.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(DbListViewModel.SelectedRow))
-                Editor = list.SelectedRow is { } row
-                    ? new ClientTextViewModel(row.Record, _clientItems, _images, _session.Commands, _settings, Resolver(), _sprite)
-                    : null;
+            if (e.PropertyName != nameof(DbListViewModel.SelectedRow)) return;
+            Editor = list.SelectedRow is { } row
+                ? new ClientTextViewModel(row.Record, _clientItems, _images, _session.Commands, _settings, Resolver(), _sprite)
+                : null;
+            OnPropertyChanged(nameof(CanRestore));
         };
 
         List = list;

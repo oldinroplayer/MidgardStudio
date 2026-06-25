@@ -59,7 +59,7 @@ public static class AbraDbSchema
     private static readonly DbSchema ProbabilityRow = DbSchema.Nested("AbraProbability", new[]
     {
         FieldSchema.Int("Level", "Level"),
-        new FieldSchema { Name = "Probability", Label = "Probability", Kind = FieldKind.Int, Default = 0, RateScale = 10000 },
+        new FieldSchema { Name = "Probability", Label = "Probability (0-10,000)", Kind = FieldKind.Int, Default = 0, RateScale = 10000, Min = 0, Max = 10000 },
     });
 
     public static readonly DbSchema Instance = new()
@@ -90,7 +90,7 @@ public static class MobSummonSchema
     public static readonly DbSchema SummonRow = DbSchema.Nested("SummonEntry", new[]
     {
         new FieldSchema { Name = "Mob", Label = "Mob", Kind = FieldKind.Reference, Enum = EnumSource.Reference("SummonMob", "mob_db") },
-        FieldSchema.Int("Rate", "Rate (0-1,000,000)"),
+        new FieldSchema { Name = "Rate", Label = "Rate (0-1,000,000)", Kind = FieldKind.Int, Default = 0, Min = 0, Max = 1000000 },
     });
 
     public static readonly DbSchema Instance = new()

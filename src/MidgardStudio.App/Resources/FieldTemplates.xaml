@@ -275,7 +275,9 @@
             </Grid.ColumnDefinitions>
             <TextBlock Text="{Binding Label}" Style="{StaticResource FieldLabel}" />
             <Border Grid.Column="1" Style="{StaticResource FieldBox}">
-                <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Value}" IsEnabled="{Binding IsEditable}"
+                <!-- Non-editable: shows the friendly Label, stores the raw Value (reliably renders for read-only base records). -->
+                <ComboBox ItemsSource="{Binding Options}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                          SelectedValue="{Binding Value, Mode=TwoWay}" IsEnabled="{Binding IsEditable}" IsEditable="False"
                           Style="{StaticResource FieldComboBox}" />
             </Border>
         </Grid>

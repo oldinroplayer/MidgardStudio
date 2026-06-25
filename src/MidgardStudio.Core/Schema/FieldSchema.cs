@@ -47,6 +47,19 @@ public sealed class FieldSchema
     /// <summary>When &gt; 1, the UI shows the value as a percentage (e.g. 10000 =&gt; 100.00%).</summary>
     public int RateScale { get; init; } = 1;
 
+    /// <summary>Optional inclusive bounds for Int fields. The editor clamps user input into this range
+    /// so an out-of-range value (e.g. a summon Rate above 1,000,000) can't be entered.</summary>
+    public int? Min { get; init; }
+    public int? Max { get; init; }
+
+    /// <summary>Clamps a value into this field's [<see cref="Min"/>, <see cref="Max"/>] bounds (no-op when unbounded).</summary>
+    public int Clamp(int value)
+    {
+        if (Min is { } min && value < min) return min;
+        if (Max is { } max && value > max) return max;
+        return value;
+    }
+
     /// <summary>Optional conditional visibility (e.g. WeaponLevel only for Type == Weapon).</summary>
     public Func<DbRecord, bool>? IsApplicable { get; init; }
 

@@ -8,21 +8,57 @@ namespace MidgardStudio.Core.Schemas;
 /// </summary>
 public static class ItemEnums
 {
-    public static readonly EnumSource Type = EnumSource.Static("ItemType",
-        "Healing", "Usable", "Etc", "Armor", "Weapon", "Card",
-        "PetEgg", "PetArmor", "Ammo", "DelayConsume", "ShadowGear", "Cash");
+    public static readonly EnumSource Type = EnumSource.Labeled("ItemType",
+        ("Healing", "Healing Item"),
+        ("Usable", "Usable"),
+        ("Etc", "Etc / Miscellaneous"),
+        ("Armor", "Armor"),
+        ("Weapon", "Weapon"),
+        ("Card", "Card"),
+        ("PetEgg", "Pet Egg"),
+        ("PetArmor", "Pet Equipment"),
+        ("Ammo", "Ammunition"),
+        ("DelayConsume", "Delayed Consumable"),
+        ("ShadowGear", "Shadow Equipment"),
+        ("Cash", "Cash Shop Item"));
 
-    // Combined Weapon + Ammo + Card subtypes (context-filtered by the editor based on Type).
-    public static readonly EnumSource SubType = EnumSource.Static("ItemSubType",
+    // Combined Weapon + Ammo + Card subtypes. Labels are display-only; the raw value is stored in YAML.
+    public static readonly EnumSource SubType = EnumSource.Labeled("ItemSubType",
         // weapons
-        "Fist", "Dagger", "1hSword", "2hSword", "1hSpear", "2hSpear",
-        "1hAxe", "2hAxe", "Mace", "Staff", "Bow", "Knuckle", "Musical",
-        "Whip", "Book", "Katar", "Revolver", "Rifle", "Gatling",
-        "Shotgun", "Grenade", "Huuma", "2hStaff",
+        ("Fist", "Bare Fist"),
+        ("Dagger", "Dagger"),
+        ("1hSword", "One-Handed Sword"),
+        ("2hSword", "Two-Handed Sword"),
+        ("1hSpear", "One-Handed Spear"),
+        ("2hSpear", "Two-Handed Spear"),
+        ("1hAxe", "One-Handed Axe"),
+        ("2hAxe", "Two-Handed Axe"),
+        ("Mace", "Mace"),
+        ("Staff", "One-Handed Staff"),
+        ("Bow", "Bow"),
+        ("Knuckle", "Knuckle"),
+        ("Musical", "Musical Instrument"),
+        ("Whip", "Whip"),
+        ("Book", "Book"),
+        ("Katar", "Katar"),
+        ("Revolver", "Revolver"),
+        ("Rifle", "Rifle"),
+        ("Gatling", "Gatling Gun"),
+        ("Shotgun", "Shotgun"),
+        ("Grenade", "Grenade Launcher"),
+        ("Huuma", "Huuma Shuriken"),
+        ("2hStaff", "Two-Handed Staff"),
         // ammo
-        "Arrow", "Bullet", "Shell", "Shuriken", "Kunai", "CannonBall", "ThrowWeapon",
+        ("Arrow", "Arrow"),
+        ("Bullet", "Bullet"),
+        ("Shell", "Shell"),
+        ("Shuriken", "Shuriken"),
+        ("Kunai", "Kunai"),
+        ("CannonBall", "Cannon Ball"),
+        ("ThrowWeapon", "Throwing Weapon"),
         // card
-        "Normal", "Enchant");
+        ("Normal", "Normal (Card)"),
+        ("Enchant", "Enchant (Card)"));
 
     public static readonly EnumSource Gender = EnumSource.Static("Gender",
         "Female", "Male", "Both");

@@ -94,7 +94,12 @@ public sealed class IntFieldEditorViewModel : FieldEditorViewModel
     public int Value
     {
         get => Record.GetInt(FieldName);
-        set { if (value != Value) { Commit(value); OnPropertyChanged(); } }
+        set
+        {
+            int clamped = Field.Clamp(value);
+            if (clamped != Value) Commit(clamped);
+            OnPropertyChanged(); // always notify so an out-of-range entry snaps back to the clamped value
+        }
     }
 }
 
@@ -133,10 +138,14 @@ public sealed class EnumFieldEditorViewModel : FieldEditorViewModel
 {
     public EnumFieldEditorViewModel(DbRecord r, FieldSchema f, FieldEditorContext c) : base(r, f, c)
     {
-        Options = f.Enum?.Values ?? (IReadOnlyList<string>)Array.Empty<string>();
+        var src = f.Enum;
+        Options = src is null
+            ? Array.Empty<EnumOption>()
+            : src.Values.Select(v => new EnumOption(v, src.Label(v))).ToArray();
     }
 
-    public IReadOnlyList<string> Options { get; }
+    /// <summary>The selectable values with their friendly labels (the UI shows the label, stores the value).</summary>
+    public IReadOnlyList<EnumOption> Options { get; }
 
     public string? Value
     {
@@ -144,6 +153,9 @@ public sealed class EnumFieldEditorViewModel : FieldEditorViewModel
         set { if (value != Value) { Commit(value); OnPropertyChanged(); } }
     }
 }
+
+/// <summary>A selectable enum value paired with its friendly display label.</summary>
+public readonly record struct EnumOption(string Value, string Label);
 
 public sealed class ScriptFieldEditorViewModel : FieldEditorViewModel
 {

@@ -9,6 +9,20 @@
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:DbWorkspaceViewModel}">
 
+    <UserControl.Resources>
+        <!-- Origin badge cell (Base / Override / Custom) — shared by the master list columns. -->
+        <DataTemplate x:Key="OriginBadgeCellTemplate">
+            <Border CornerRadius="3" Padding="5,1" HorizontalAlignment="Left"
+                    Background="{Binding Origin, Converter={StaticResource OriginBrush}}">
+                <TextBlock Text="{Binding Origin, Converter={StaticResource OriginLabel}}"
+                           FontSize="9.5" FontWeight="SemiBold" Foreground="White" />
+            </Border>
+        </DataTemplate>
+        <DataTemplate x:Key="IconCellTemplate">
+            <Image Source="{Binding Icon}" Width="22" Height="22" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+        </DataTemplate>
+    </UserControl.Resources>
+
     <Grid>
         <!-- Loading overlay -->
         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
@@ -70,8 +84,8 @@
                         <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyEntryCommand}" />
                         <KeyBinding Key="D" Modifiers="Control+Shift" Command="{Binding CopyToIdCommand}" />
                         <KeyBinding Key="R" Modifiers="Control+Shift" Command="{Binding RestoreToDefaultCommand}" />
-                        <KeyBinding Key="G" Modifiers="Control" Command="{Binding SelectInClientItemsCommand}" />
-                        <KeyBinding Key="G" Modifiers="Control+Shift" Command="{Binding AddInClientItemsCommand}" />
+                        <KeyBinding Key="E" Modifiers="Control" Command="{Binding SelectInClientItemsCommand}" />
+                        <KeyBinding Key="E" Modifiers="Control+Shift" Command="{Binding AddInClientItemsCommand}" />
                         <KeyBinding Key="Delete" Command="{Binding DeleteEntryCommand}" />
                         <KeyBinding Key="F2" Command="{Binding ChangeIdCommand}" />
                     </ListView.InputBindings>
@@ -103,38 +117,17 @@
                                 <MenuItem.Icon><ui:SymbolIcon Symbol="Delete24" /></MenuItem.Icon>
                             </MenuItem>
                             <Separator Visibility="{Binding PlacementTarget.DataContext.IsItemDb, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
-                            <MenuItem Header="Select in Client Items" InputGestureText="Ctrl+G"
+                            <MenuItem Header="Select in Client Items" InputGestureText="Ctrl+E"
                                       Visibility="{Binding PlacementTarget.DataContext.IsItemDb, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
                                       Command="{Binding PlacementTarget.DataContext.SelectInClientItemsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                            <MenuItem Header="Add in Client Items" InputGestureText="Ctrl+Shift+G"
+                            <MenuItem Header="Add in Client Items" InputGestureText="Ctrl+Shift+E"
                                       Visibility="{Binding PlacementTarget.DataContext.IsItemDb, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
                                       Command="{Binding PlacementTarget.DataContext.AddInClientItemsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                         </ContextMenu>
                     </ListView.ContextMenu>
                     <ListView.View>
-                        <GridView>
-                            <GridViewColumn Header="" Width="70">
-                                <GridViewColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Border CornerRadius="3" Padding="5,1" HorizontalAlignment="Left"
-                                                Background="{Binding Origin, Converter={StaticResource OriginBrush}}">
-                                            <TextBlock Text="{Binding Origin, Converter={StaticResource OriginLabel}}"
-                                                       FontSize="9.5" FontWeight="SemiBold" Foreground="White" />
-                                        </Border>
-                                    </DataTemplate>
-                                </GridViewColumn.CellTemplate>
-                            </GridViewColumn>
-                            <GridViewColumn Header="" Width="30">
-                                <GridViewColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Image Source="{Binding Icon}" Width="22" Height="22"
-                                               RenderOptions.BitmapScalingMode="NearestNeighbor" />
-                                    </DataTemplate>
-                                </GridViewColumn.CellTemplate>
-                            </GridViewColumn>
-                            <GridViewColumn x:Name="IdColumn" Header="ID" Width="60" DisplayMemberBinding="{Binding KeyText}" />
-                            <GridViewColumn x:Name="NameColumn" Header="Name" Width="166" DisplayMemberBinding="{Binding Name}" />
-                        </GridView>
+                        <!-- Columns are built per-schema in code-behind (BuildColumns). -->
+                        <GridView x:Name="MasterGrid" />
                     </ListView.View>
                 </ListView>
             </DockPanel>

@@ -72,6 +72,9 @@ public sealed partial class DbListViewModel : ObservableObject
         return label + (_sortAscending ? "  ▲" : "  ▼");
     }
 
+    /// <summary>The sort glyph (▲/▼) for a column, or empty when it isn't the active sort column.</summary>
+    public string SortGlyph(string key) => _sortColumn != key ? string.Empty : (_sortAscending ? "  ▲" : "  ▼");
+
     /// <summary>Cycles a column's sort: ascending → descending → default (id ascending, no glyph).</summary>
     public void ToggleSort(string key)
     {
