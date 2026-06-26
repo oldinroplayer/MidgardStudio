@@ -1,4 +1,6 @@
 using System.IO;
+using System.Linq;
+using System.Text;
 using MidgardStudio.Core.IO;
 using MidgardStudio.Core.Lua;
 using MidgardStudio.Core.Workspace;
@@ -24,10 +26,18 @@ public sealed class ClientItemService
     {
         _session = session;
         // A profile switch points at a different server -> drop the cached client tables.
-        _session.WorkspaceReloaded += () => { _file = null; _official = null; _baseText = null; IsDirty = false; };
+        _session.WorkspaceReloaded += () => { _file = null; _official = null; _baseText = null; _savedSignature = null; };
     }
 
-    public bool IsDirty { get; private set; }
+    /// <summary>The serialized client-edit content captured at load and after each save; the dirty check
+    /// compares the current content to it. Null until the client file is first read.</summary>
+    private string? _savedSignature;
+
+    /// <summary>True when the in-memory client tables differ from what's on disk — drives both the Save
+    /// button and the save-write decision. Computed by content comparison, so editing an item and then
+    /// undoing back to its loaded/saved state correctly reports "nothing to save" (no sticky flag to leave
+    /// lit), and a redundant override identical to the official entry is not treated as a change.</summary>
+    public bool IsDirty => _file is not null && Signature() != _savedSignature;
 
     private WorkspacePaths Paths => _session.Paths;
 
@@ -57,9 +67,20 @@ public sealed class ClientItemService
     /// <summary>Lazily-indexed base/official itemInfo (entries parsed on demand — the base file is ~7 MB).</summary>
     private OfficialItemInfo Official => _official ??= new OfficialItemInfo(BaseText);
 
-    private ItemInfoFile ClientFile => _file ??= System.IO.File.Exists(CustomPath)
-        ? _reader.ReadCustomFile(_codec.ReadText(CustomPath))
-        : new ItemInfoFile();
+    private ItemInfoFile ClientFile
+    {
+        get
+        {
+            if (_file is null)
+            {
+                _file = File.Exists(CustomPath)
+                    ? _reader.ReadCustomFile(_codec.ReadText(CustomPath))
+                    : new ItemInfoFile();
+                _savedSignature = Signature(); // baseline = the just-loaded content
+            }
+            return _file;
+        }
+    }
 
     public bool IsOfficial(int id) => Official.Contains(id);
 
@@ -85,14 +106,14 @@ public sealed class ClientItemService
         return new ItemInfoEntry { Id = id };
     }
 
-    /// <summary>Stores the entry into the correct table (routing by official id) and marks dirty.</summary>
+    /// <summary>Stores the entry into the correct table (routing by official id). Dirtiness is derived by
+    /// content comparison (see <see cref="IsDirty"/>), so there is no flag to set here.</summary>
     public void Upsert(ItemInfoEntry entry)
     {
         ClientFile.Custom.Remove(entry.Id);
         ClientFile.Override.Remove(entry.Id);
         if (TargetFor(entry.Id) == ItemInfoTarget.Override) ClientFile.Override[entry.Id] = entry;
         else ClientFile.Custom[entry.Id] = entry;
-        IsDirty = true;
     }
 
     public void StageSave(FileTransaction tx)
@@ -134,6 +155,27 @@ public sealed class ClientItemService
         var tx = new FileTransaction(backupDir);
         StageSave(tx);
         tx.Commit();
-        IsDirty = false;
+        _savedSignature = Signature(); // re-baseline: the on-disk state now matches memory
+    }
+
+    /// <summary>A canonical serialization of the unsaved client edits: every Custom entry, plus Override
+    /// entries that actually differ from the official base. A no-op override identical to the official entry
+    /// changes nothing in-game, so it isn't counted — that's what lets "edit an official item, then undo"
+    /// settle back to a clean state instead of leaving a redundant override behind.</summary>
+    private string Signature()
+    {
+        if (_file is null) return string.Empty;
+        var sb = new StringBuilder();
+        foreach (var id in _file.Custom.Keys.OrderBy(k => k))
+            sb.Append('C').Append(id).Append('\n').Append(ItemInfoWriter.FormatEntry(_file.Custom[id])).Append("\n\n");
+        foreach (var id in _file.Override.Keys.OrderBy(k => k))
+        {
+            var entry = _file.Override[id];
+            var official = Official.Entry(id);
+            if (official is not null && ItemInfoWriter.FormatEntry(entry) == ItemInfoWriter.FormatEntry(official))
+                continue; // override identical to the official entry — a no-op, not a real change
+            sb.Append('O').Append(id).Append('\n').Append(ItemInfoWriter.FormatEntry(entry)).Append("\n\n");
+        }
+        return sb.ToString();
     }
 }

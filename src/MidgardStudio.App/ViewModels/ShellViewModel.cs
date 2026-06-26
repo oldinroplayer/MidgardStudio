@@ -432,7 +432,9 @@ public partial class ShellViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanSave))]
     private void Save() => DoSave(createBackup: true, showSummary: true, gated: true);
 
-    /// <summary>True when there are server or client edits not yet written to disk.</summary>
+    /// <summary>True when there are server or client edits not yet written to disk. Client dirtiness is a
+    /// content comparison (<see cref="ClientItemService.IsDirty"/>), so undoing a client edit back to
+    /// baseline correctly clears it instead of leaving Save lit.</summary>
     public bool HasUnsavedChanges => _session.Commands.IsModified || _clientItems.IsDirty;
 
     /// <summary>Gate for the Save command — disabled (greyed out) when nothing has changed.</summary>

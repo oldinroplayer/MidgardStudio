@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -23,7 +24,7 @@ public partial class ClientItemsView : UserControl
     {
         InitializeComponent();
         NewLineButton.Click += (_, _) => Insert("^FFFFFF_^000000");   // white "_" on the white in-game bg = blank line
-        ResetColorButton.Click += (_, _) => Insert("^000000");
+        ResetColorButton.Click += (_, _) => StripColors();
         MasterList.AddHandler(GridViewColumnHeader.ClickEvent, new RoutedEventHandler(OnHeaderClick));
         MasterList.SelectionChanged += (_, _) =>
         {
@@ -53,6 +54,32 @@ public partial class ClientItemsView : UserControl
     {
         if (sender is System.Windows.FrameworkElement fe && fe.Tag is string hex)
             Insert("^" + hex);
+    }
+
+    // Matches the invisible blank-line marker (white + underscore + black, length 15) OR a single ^RRGGBB
+    // color code (length 7). The marker alternative is listed first so it wins over its two codes separately.
+    private static readonly Regex ColorOrBlankLine = new(@"\^[Ff]{6}_\^0{6}|\^[0-9A-Fa-f]{6}", RegexOptions.Compiled);
+
+    /// <summary>Removes every ^RRGGBB color code from both the identified and unidentified description boxes
+    /// of the selected item, while preserving the invisible "blank line" markers, committing each change so
+    /// it records an undo step and flags unsaved changes.</summary>
+    private void StripColors()
+    {
+        StripBox(IdDescBox);
+        StripBox(UnidDescBox);
+    }
+
+    private static void StripBox(WpfTextBox box)
+    {
+        string original = box.Text;
+        // Keep the blank-line markers (match length 15), drop the bare color codes (length 7). Clients skip
+        // truly-empty lines, so the invisible underscore must survive for the blank lines to keep working.
+        string result = ColorOrBlankLine.Replace(original, m => m.Length > 7 ? m.Value : string.Empty);
+        if (result == original) return; // nothing to strip; don't create an empty undo step
+        int caret = Math.Min(box.CaretIndex, result.Length);
+        box.Text = result;
+        box.CaretIndex = caret;
+        box.GetBindingExpression(WpfTextBox.TextProperty)?.UpdateSource();
     }
 
     /// <summary>Inserts a code at the caret of the active (last-focused) description box, committing the

@@ -185,8 +185,8 @@
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                     <ui:Button x:Name="NewLineButton" Content="↵ New line" Focusable="False" Margin="8,0,0,0"
                                                ToolTip="Insert a blank line (^FFFFFF_^000000)" />
-                                    <ui:Button x:Name="ResetColorButton" Content="Reset ^000000" Focusable="False" Margin="6,0,0,0"
-                                               ToolTip="Reset text color to black" />
+                                    <ui:Button x:Name="ResetColorButton" Content="Reset Colors" Focusable="False" Margin="6,0,0,0"
+                                               ToolTip="Remove all ^RRGGBB color codes from this item's identified and unidentified descriptions" />
                                 </StackPanel>
                                 <WrapPanel x:Name="SwatchPanel">
                                     <Border Width="20" Height="20" Margin="2" CornerRadius="3" BorderThickness="1" BorderBrush="#55000000" Background="#000000" Tag="000000" Cursor="Hand" MouseLeftButtonDown="Swatch_Click" />
