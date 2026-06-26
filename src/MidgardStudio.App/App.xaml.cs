@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,10 +66,64 @@ public partial class App : Application
 
         ApplicationThemeManager.Apply(ApplicationTheme.Dark);
 
+        // Show the animated splash on its own UI thread, then build the shell (which loads the workspace
+        // databases on this thread — several seconds). The splash keeps animating throughout.
+        var splash = ShowSplash();
+        long startedAt = Environment.TickCount64;
+
         var window = Services.GetRequiredService<MainWindow>();
+
+        // Keep the splash up long enough to be seen even if the load happened to be quick. Pump the
+        // dispatcher (rather than block with Thread.Sleep) so the main thread's message queue stays serviced.
+        long remainingMs = 1600 - (Environment.TickCount64 - startedAt);
+        if (remainingMs > 0)
+        {
+            var frame = new DispatcherFrame();
+            var timer = new DispatcherTimer(TimeSpan.FromMilliseconds(remainingMs), DispatcherPriority.Background,
+                (_, _) => frame.Continue = false, Dispatcher.CurrentDispatcher);
+            timer.Start();
+            Dispatcher.PushFrame(frame);
+            timer.Stop();
+        }
+
         window.Show();
+        window.Activate();
+        splash?.Dispatcher.BeginInvoke(new Action(splash.BeginShutdown));
 
         base.OnStartup(e);
+    }
+
+    /// <summary>
+    /// Creates the splash window on a dedicated background STA thread with its own dispatcher, so it animates
+    /// independently of the main thread's (blocking) workspace load. A splash failure never breaks startup.
+    /// </summary>
+    private static Views.SplashWindow? ShowSplash()
+    {
+        Views.SplashWindow? splash = null;
+        var ready = new ManualResetEventSlim(false);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                splash = new Views.SplashWindow();
+                splash.Show();
+                ready.Set();
+                Dispatcher.Run();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Splash screen failed to display");
+                ready.Set();
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "SplashScreen",
+        };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        ready.Wait(2000); // proceed even if the splash is slow to appear
+        return splash;
     }
 
     private static void ConfigureServices(HostBuilderContext context, IServiceCollection services)
@@ -92,6 +147,7 @@ public partial class App : Application
         services.AddSingleton<GrfBrowserViewModel>();
         services.AddSingleton<ValidationViewModel>();
         services.AddSingleton<ConfigurationWizardViewModel>();
+        services.AddSingleton<OnboardingViewModel>();
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<MainWindow>();
     }

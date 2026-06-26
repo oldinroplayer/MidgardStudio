@@ -43,6 +43,11 @@
             <views:ConfigurationWizardView />
         </DataTemplate>
 
+        <!-- Onboarding tour (first run) -->
+        <DataTemplate DataType="{x:Type vm:OnboardingViewModel}">
+            <views:OnboardingView />
+        </DataTemplate>
+
         <!-- Backup manager -->
         <DataTemplate DataType="{x:Type vm:BackupManagerViewModel}">
             <views:BackupManagerView />
@@ -397,6 +402,12 @@
                     BorderBrush="#22FFFFFF" BorderThickness="1">
                 <ContentControl Content="{Binding Wizard}" />
             </Border>
+        </Border>
+
+        <!-- Onboarding tour (first run only) — sits above the wizard/workspace until completed. -->
+        <Border Grid.Row="1" Grid.RowSpan="2" Background="#FF08060F"
+                Visibility="{Binding ShowOnboarding, Converter={StaticResource BoolToVis}}">
+            <ContentControl Content="{Binding Onboarding}" />
         </Border>
 
         <!-- Click-spark overlay: sits above everything and never intercepts input -->

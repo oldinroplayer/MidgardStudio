@@ -44,6 +44,10 @@ public sealed class AppSettings
     /// <summary>How many dated backup snapshots to keep per profile before the oldest are pruned.</summary>
     public int BackupRetention { get; set; } = 30;
 
+    /// <summary>True once the user has been shown the one-time onboarding tour. Drives whether the
+    /// onboarding screens are presented on launch (they run exactly once).</summary>
+    public bool HasSeenOnboarding { get; set; }
+
     /// <summary>Options for the client-item Autocomplete generator.</summary>
     public MidgardStudio.Core.Lua.AutocompleteConfig Autocomplete { get; set; } = new();
 }

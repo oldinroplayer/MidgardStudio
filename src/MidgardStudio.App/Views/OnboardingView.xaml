@@ -1,0 +1,138 @@
+<UserControl x:Class="MidgardStudio.App.Views.OnboardingView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:vm="clr-namespace:MidgardStudio.App.ViewModels"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:OnboardingViewModel}">
+
+    <UserControl.Resources>
+        <!-- Replayed from code-behind on every page change (the content host is reused, so a one-shot
+             Loaded trigger would only fire once). Fade + slide-up. -->
+        <Storyboard x:Key="PageEntrance">
+            <DoubleAnimation Storyboard.TargetName="PageHost" Storyboard.TargetProperty="Opacity"
+                             From="0" To="1" Duration="0:0:0.40" />
+            <DoubleAnimation Storyboard.TargetName="PageSlide" Storyboard.TargetProperty="Y"
+                             From="26" To="0" Duration="0:0:0.45">
+                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <!-- One progress dot; the active page's dot widens into a magenta pill. -->
+        <DataTemplate x:Key="DotTemplate" DataType="{x:Type vm:OnboardingPage}">
+            <Border Height="7" Width="7" CornerRadius="3.5" Margin="4,0" Background="#33FFFFFF">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                <Setter Property="Background" Value="#D916FB" />
+                                <Setter Property="Width" Value="22" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.Background>
+            <RadialGradientBrush GradientOrigin="0.5,0.32" Center="0.5,0.38" RadiusX="0.85" RadiusY="0.95">
+                <GradientStop Color="#1E1735" Offset="0.0" />
+                <GradientStop Color="#100C1D" Offset="0.6" />
+                <GradientStop Color="#08060F" Offset="1.0" />
+            </RadialGradientBrush>
+        </Grid.Background>
+
+        <!-- Step counter (top-left) + Skip (top-right) -->
+        <TextBlock Text="{Binding StepLabel}" HorizontalAlignment="Left" VerticalAlignment="Top"
+                   Margin="46,36,0,0" Foreground="#6E6788" FontSize="12.5" />
+        <ui:Button Content="Skip tour" Appearance="Transparent" HorizontalAlignment="Right" VerticalAlignment="Top"
+                   Margin="0,28,42,0" Foreground="#9189A8" Command="{Binding SkipCommand}"
+                   Visibility="{Binding IsLast, Converter={StaticResource BoolToVis}, ConverterParameter=invert}" />
+
+        <!-- Current page (static host bound to CurrentPage.*; entrance replayed from code-behind) -->
+        <StackPanel x:Name="PageHost" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="600">
+            <StackPanel.RenderTransform>
+                <TranslateTransform x:Name="PageSlide" Y="0" />
+            </StackPanel.RenderTransform>
+
+            <Grid Width="134" Height="134" HorizontalAlignment="Center" Margin="0,0,0,32">
+                <Ellipse x:Name="IconGlow" Width="134" Height="134" Opacity="0.45" RenderTransformOrigin="0.5,0.5"
+                         IsHitTestVisible="False">
+                    <Ellipse.Fill>
+                        <RadialGradientBrush>
+                            <GradientStop Color="#669A3DF5" Offset="0.0" />
+                            <GradientStop Color="#00120A20" Offset="0.72" />
+                        </RadialGradientBrush>
+                    </Ellipse.Fill>
+                    <Ellipse.RenderTransform>
+                        <ScaleTransform x:Name="IconGlowScale" ScaleX="0.9" ScaleY="0.9" />
+                    </Ellipse.RenderTransform>
+                    <Ellipse.Triggers>
+                        <EventTrigger RoutedEvent="Loaded">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0.3" To="0.62"
+                                                     Duration="0:0:1.9" AutoReverse="True" RepeatBehavior="Forever" />
+                                    <DoubleAnimation Storyboard.TargetName="IconGlowScale" Storyboard.TargetProperty="ScaleX"
+                                                     From="0.9" To="1.07" Duration="0:0:1.9" AutoReverse="True" RepeatBehavior="Forever" />
+                                    <DoubleAnimation Storyboard.TargetName="IconGlowScale" Storyboard.TargetProperty="ScaleY"
+                                                     From="0.9" To="1.07" Duration="0:0:1.9" AutoReverse="True" RepeatBehavior="Forever" />
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </Ellipse.Triggers>
+                </Ellipse>
+                <Border Width="104" Height="104" CornerRadius="52" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        BorderBrush="#40A15CF5" BorderThickness="1.2">
+                    <Border.Background>
+                        <RadialGradientBrush>
+                            <GradientStop Color="#2A2140" Offset="0.0" />
+                            <GradientStop Color="#15101F" Offset="1.0" />
+                        </RadialGradientBrush>
+                    </Border.Background>
+                    <ui:SymbolIcon Symbol="{Binding CurrentPage.Icon}" FontSize="50" Foreground="#D8CBF6"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+            </Grid>
+
+            <TextBlock Text="{Binding CurrentPage.Title}" Style="{StaticResource TitleScreen}" FontSize="27"
+                       HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding CurrentPage.Body}" Foreground="#B9B2CE" FontSize="14.5"
+                       HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
+                       Margin="0,14,0,0" MaxWidth="520" LineHeight="22" />
+        </StackPanel>
+
+        <!-- Bottom navigation: Back · dots · Next / Get started -->
+        <Grid VerticalAlignment="Bottom" Margin="44,0,44,40">
+            <ui:Button HorizontalAlignment="Left" Appearance="Transparent" Content="Back" Command="{Binding BackCommand}"
+                       Visibility="{Binding IsFirst, Converter={StaticResource BoolToVis}, ConverterParameter=invert}">
+                <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowLeft24" /></ui:Button.Icon>
+            </ui:Button>
+
+            <ItemsControl ItemsSource="{Binding Pages}" ItemTemplate="{StaticResource DotTemplate}"
+                          HorizontalAlignment="Center" VerticalAlignment="Center">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <ui:Button Appearance="Primary" Command="{Binding NextCommand}"
+                           Visibility="{Binding IsLast, Converter={StaticResource BoolToVis}, ConverterParameter=invert}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Next" VerticalAlignment="Center" />
+                        <ui:SymbolIcon Symbol="ArrowRight24" FontSize="16" Margin="7,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ui:Button>
+                <ui:Button Content="Get started" Appearance="Primary" Command="{Binding FinishCommand}"
+                           Visibility="{Binding IsLast, Converter={StaticResource BoolToVis}}">
+                    <ui:Button.Icon><ui:SymbolIcon Symbol="Rocket24" /></ui:Button.Icon>
+                </ui:Button>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

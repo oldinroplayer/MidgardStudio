@@ -36,6 +36,7 @@ public partial class ShellViewModel : ObservableObject
     private readonly MapCacheService _mapCache;
     private readonly AppSettingsService _appSettings;
     private readonly ConfigurationWizardViewModel _wizard;
+    private readonly OnboardingViewModel _onboarding;
     private readonly Dictionary<string, DbWorkspaceViewModel> _workspaces = new(StringComparer.Ordinal);
     private readonly System.Windows.Threading.DispatcherTimer _intervalSaveTimer = new();
     private readonly System.Windows.Threading.DispatcherTimer _editSaveTimer = new();
@@ -77,6 +78,9 @@ public partial class ShellViewModel : ObservableObject
     private bool _showWizard;
 
     [ObservableProperty]
+    private bool _showOnboarding;
+
+    [ObservableProperty]
     private string _paletteQuery = string.Empty;
 
     public ObservableCollection<PaletteResultViewModel> PaletteResults { get; } = new();
@@ -86,6 +90,9 @@ public partial class ShellViewModel : ObservableObject
 
     /// <summary>The first-run / profile-management screen, shown over the shell when <see cref="ShowWizard"/>.</summary>
     public ConfigurationWizardViewModel Wizard => _wizard;
+
+    /// <summary>The one-time onboarding tour, shown over everything on first run (<see cref="ShowOnboarding"/>).</summary>
+    public OnboardingViewModel Onboarding => _onboarding;
 
     public string ModeLabel => IsRenewal ? "Renewal" : "Pre-Renewal";
 
@@ -97,7 +104,7 @@ public partial class ShellViewModel : ObservableObject
         GrfImageService images, SpriteLinkService sprite, MobSpriteService mobSprite, ValidationViewModel validation,
         WorkspaceValidator validator,
         DropService drops, BackupService backups, MapCacheService mapCache, AppSettingsService appSettings,
-        ConfigurationWizardViewModel wizard)
+        ConfigurationWizardViewModel wizard, OnboardingViewModel onboarding)
     {
         _configService = config;
         _schemas = schemas;
@@ -115,6 +122,15 @@ public partial class ShellViewModel : ObservableObject
         _mapCache = mapCache;
         _appSettings = appSettings;
         _wizard = wizard;
+        _onboarding = onboarding;
+        _onboarding.Completed += () =>
+        {
+            // The tour runs exactly once: record that it's been seen, then reveal whatever sits beneath it
+            // (the configuration wizard on a first run, or the loaded workspace).
+            _appSettings.Settings.HasSeenOnboarding = true;
+            _appSettings.Save();
+            ShowOnboarding = false;
+        };
 
         _intervalSaveTimer.Interval = TimeSpan.FromSeconds(60); // safe default; ApplySaveMode overrides it
         _intervalSaveTimer.Tick += (_, _) => { if (IsModified) DoSave(createBackup: false); };
@@ -150,6 +166,9 @@ public partial class ShellViewModel : ObservableObject
 
         RefreshProfiles();
         ApplySaveMode();
+
+        // Onboarding runs once, the first time the app is ever opened, layered above the wizard/workspace.
+        ShowOnboarding = !_appSettings.Settings.HasSeenOnboarding;
     }
 
     /// <summary>Rebuilds the Switch-profile submenu from disk and flags the active profile.</summary>
