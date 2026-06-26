@@ -48,16 +48,21 @@ public interface IWorkspaceConfigService
 /// </summary>
 public sealed class WorkspaceConfigService : IWorkspaceConfigService
 {
-    /// <summary>Default repository root used when no config exists yet.</summary>
+    /// <summary>Default repository root used when no config exists yet. Shipped (Release) builds use an empty
+    /// root so first run always lands in the Configuration Wizard and no developer path is baked into the
+    /// binary; Debug builds point at the dev repo so local runs and the real-data tests find the bundled data.</summary>
+#if DEBUG
     public const string DefaultRepoRoot = @"C:\Users\fahha\Documents\GitHub\custom-items";
+#else
+    public const string DefaultRepoRoot = "";
+#endif
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
     };
 
-    public string ConfigDirectory { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Midgard Studio");
+    public string ConfigDirectory { get; } = AppPaths.RoamingDir;
 
     public string ConfigPath => Path.Combine(ConfigDirectory, "workspace.json");
 

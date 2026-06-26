@@ -50,10 +50,27 @@ public sealed class BackupService
     {
         _session = session;
         _settings = settings;
+        MigrateLegacyBackups();
     }
 
-    public string RootDir { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Midgard Studio", "backups");
+    public string RootDir { get; } = MidgardStudio.Core.AppPaths.BackupsDir;
+
+    /// <summary>One-time move of pre-1.0 snapshots from %APPDATA%\Midgard Studio\backups to the new
+    /// Documents location, so existing backups aren't orphaned. Best-effort: old backups simply stay put on failure.</summary>
+    private static void MigrateLegacyBackups()
+    {
+        try
+        {
+            string legacy = MidgardStudio.Core.AppPaths.LegacyRoamingBackupsDir;
+            string current = MidgardStudio.Core.AppPaths.BackupsDir;
+            if (Directory.Exists(legacy) && !Directory.Exists(current))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(current)!);
+                Directory.Move(legacy, current);
+            }
+        }
+        catch { /* best effort */ }
+    }
 
     private string ProfileDir => Path.Combine(RootDir, Sanitize(_session.Config.Name));
 

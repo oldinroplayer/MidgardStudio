@@ -77,8 +77,7 @@ public sealed class AppSettingsService
 
     public AppSettingsService()
     {
-        _path = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Midgard Studio", "app-settings.json");
+        _path = Path.Combine(MidgardStudio.Core.AppPaths.RoamingDir, "app-settings.json");
         Settings = Load();
     }
 

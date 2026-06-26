@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MidgardStudio.App.ViewModels;
+using MidgardStudio.Core;
 using MidgardStudio.Core.Workspace;
 using Serilog;
 using Wpf.Ui.Appearance;
@@ -28,14 +29,13 @@ public partial class App : Application
         // RO client lua/lub and GRF entry names use legacy single-byte codepages (default 1252).
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
-        string appData = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Midgard Studio");
-        Directory.CreateDirectory(appData);
+        string logDir = Path.Combine(AppPaths.LocalDir, "logs"); // machine-local, disposable
+        Directory.CreateDirectory(logDir);
 
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .WriteTo.File(
-                Path.Combine(appData, "logs", "MidgardStudio-.log"),
+                Path.Combine(logDir, "MidgardStudio-.log"),
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 14,
                 shared: true)
