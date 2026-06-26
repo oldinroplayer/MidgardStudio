@@ -684,7 +684,7 @@
                                                     <Setter TargetName="Bd" Property="Background" Value="#16FFFFFF" />
                                                 </Trigger>
                                                 <Trigger Property="IsSelected" Value="True">
-                                                    <Setter TargetName="Bd" Property="Background" Value="#2E6FB8" />
+                                                    <Setter TargetName="Bd" Property="Background" Value="#7A3FD4" />
                                                     <Setter Property="Foreground" Value="White" />
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
@@ -790,7 +790,7 @@
                             <Setter TargetName="Bd" Property="Background" Value="#16FFFFFF" />
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#2E6FB8" />
+                            <Setter TargetName="Bd" Property="Background" Value="#7A3FD4" />
                             <Setter Property="Foreground" Value="White" />
                         </Trigger>
                     </ControlTemplate.Triggers>

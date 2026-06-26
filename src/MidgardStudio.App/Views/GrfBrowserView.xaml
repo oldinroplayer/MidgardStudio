@@ -42,7 +42,7 @@
                                 <Setter TargetName="Bd" Property="Background" Value="#14FFFFFF" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#2E6FB8" />
+                                <Setter TargetName="Bd" Property="Background" Value="#7A3FD4" />
                                 <Setter Property="Foreground" Value="White" />
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -69,7 +69,7 @@
                                                 <Setter Property="Background" Value="#14FFFFFF" />
                                             </Trigger>
                                             <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TreeViewItem}}" Value="True">
-                                                <Setter Property="Background" Value="#2E6FB8" />
+                                                <Setter Property="Background" Value="#7A3FD4" />
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -130,7 +130,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Background" Value="#14FFFFFF" /></Trigger>
-                            <Trigger Property="IsChecked" Value="True"><Setter TargetName="B" Property="Background" Value="#2E6FB8" /></Trigger>
+                            <Trigger Property="IsChecked" Value="True"><Setter TargetName="B" Property="Background" Value="#7A3FD4" /></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -154,7 +154,7 @@
                                 <Setter TargetName="Bd" Property="Background" Value="#14FFFFFF" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#2E6FB8" />
+                                <Setter TargetName="Bd" Property="Background" Value="#7A3FD4" />
                                 <Setter Property="Foreground" Value="White" />
                             </Trigger>
                         </ControlTemplate.Triggers>

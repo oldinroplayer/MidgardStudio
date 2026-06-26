@@ -2,6 +2,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -72,7 +73,11 @@ public partial class App : Application
             args.SetObserved();
         };
 
-        ApplicationThemeManager.Apply(ApplicationTheme.Dark);
+        // Use the Midgard brand purple as the accent instead of inheriting the user's Windows accent colour,
+        // so Primary buttons, toggles, focus rings and accent-driven controls are on-brand on every machine.
+        ApplicationThemeManager.Apply(ApplicationTheme.Dark, updateAccent: false);
+        ApplicationAccentColorManager.Apply(
+            (Color)ColorConverter.ConvertFromString("#8D2DF2")!, ApplicationTheme.Dark, false, false);
 
         // Show the animated splash on its own UI thread, then build the shell (which loads the workspace
         // databases on this thread — several seconds). The splash keeps animating throughout.
