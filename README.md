@@ -1,15 +1,11 @@
 <div align="center">
 
-<img src="src/MidgardStudio.App/Assets/logo.png" width="116" alt="Midgard Studio" />
+<img src="screenshots/banner.png" alt="Midgard Studio — The Ragnarok Server Studio" />
 
 # Midgard Studio
 
 **The Ragnarok Server Studio.**
 A native Windows editor for Ragnarok Online private servers — server databases and client data, side by side, in one app.
-
-<br />
-
-<img src="screenshots/readme.png" width="880" alt="Midgard Studio — server databases and client data in one app" />
 
 </div>
 
