@@ -18,6 +18,7 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
     private readonly DbSchema _schema;
     private readonly IReferenceResolver _references;
     private readonly ClientItemService? _clientItems;
+    private readonly ClientSkillService? _clientSkills;
     private readonly GrfImageService? _images;
     private readonly MobSpriteService? _mobSprite;
     private readonly DropService? _drops;
@@ -27,12 +28,14 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
 
     public DbWorkspaceViewModel(WorkspaceSession session, DbSchema schema, IReferenceResolver references,
         ClientItemService? clientItems = null, GrfImageService? images = null,
-        MobSpriteService? mobSprite = null, DropService? drops = null, Action<string, RecordKey>? navigate = null)
+        MobSpriteService? mobSprite = null, DropService? drops = null, Action<string, RecordKey>? navigate = null,
+        ClientSkillService? clientSkills = null)
     {
         _session = session;
         _schema = schema;
         _references = references;
         _clientItems = clientItems;
+        _clientSkills = clientSkills;
         _images = images;
         _mobSprite = mobSprite;
         _drops = drops;
@@ -163,6 +166,31 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
         _session.Commands.Execute(new AddRecordCommand(_overlay, clone));
         List.AddRow(List.CreateRow(clone.Key));
         List.SelectByKey(clone.Key);
+    }
+
+    /// <summary>True for the Skills database, which has a Client Skills counterpart (skillinfoz).</summary>
+    public bool IsSkillDb => _schema.Id == "skill_db";
+
+    /// <summary>Ctrl+E dispatcher: "Select in Client …" for whichever DB has a client counterpart.</summary>
+    [RelayCommand]
+    private void SelectInClient()
+    {
+        if (IsItemDb) SelectInClientItems();
+        else if (IsSkillDb) SelectInClientSkills();
+    }
+
+    [RelayCommand]
+    private void SelectInClientSkills()
+    {
+        if (!IsSkillDb || List?.SelectedRow is not { } row) return;
+        string aegis = row.Record.GetString("Name") ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(aegis) || _clientSkills is null || !_clientSkills.Exists(aegis))
+        {
+            Views.ConfirmDialog.Alert("Not in Client Skills",
+                $"Skill '{(string.IsNullOrWhiteSpace(aegis) ? "#" + row.KeyText : aegis)}' doesn't exist in the Client Skills files (skillinfoz) yet.");
+            return;
+        }
+        _navigate?.Invoke("client_skills", RecordKey.Of(aegis));
     }
 
     [RelayCommand]

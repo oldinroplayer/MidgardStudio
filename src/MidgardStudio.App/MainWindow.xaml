@@ -33,6 +33,10 @@
             <views:ClientItemsView />
         </DataTemplate>
 
+        <DataTemplate DataType="{x:Type vm:ClientSkillsViewModel}">
+            <views:ClientSkillsView />
+        </DataTemplate>
+
         <!-- Item combos editor -->
         <DataTemplate DataType="{x:Type vm:ComboEditorViewModel}">
             <views:ComboEditorView />

@@ -195,9 +195,11 @@ public sealed partial class GrfBrowserViewModel : ObservableObject
 
     public void RefreshFromConfig()
     {
-        var cfg = _config.Load();
-        _grf.SetDisplayCodepage(cfg.ClientCodepage); // decode entry names in this profile's codepage (set before re-opening)
-        _grf.Configure(cfg.GrfPaths);
+        // GRF entry names are ALWAYS decoded as Windows-1252: GrfAssetPaths builds icon/sprite paths in the
+        // 1252 representation of the Korean RO data folders, so the GRF must match. The per-profile Display
+        // Encoding does NOT apply here (it would mojibake every resource path and hide all icons).
+        _grf.SetDisplayCodepage(1252);
+        _grf.Configure(_config.Load().GrfPaths);
 
         Sources.Clear();
         foreach (var s in _grf.Sources) Sources.Add(s);

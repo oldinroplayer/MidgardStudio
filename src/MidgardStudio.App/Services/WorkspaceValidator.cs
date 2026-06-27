@@ -1,5 +1,7 @@
+using MidgardStudio.Core.Lua;
 using MidgardStudio.Core.Model;
 using MidgardStudio.Core.Validation;
+using MidgardStudio.Core.Validation.Validators;
 using MidgardStudio.Grf;
 
 namespace MidgardStudio.App.Services;
@@ -16,17 +18,19 @@ public sealed class WorkspaceValidator
     private readonly SchemaRegistry _schemas;
     private readonly ReferenceIndex _references;
     private readonly ClientItemService _client;
+    private readonly ClientSkillService _clientSkills;
     private readonly MobSpriteService _mobSprite;
     private readonly SpriteLinkService _sprite;
     private readonly GrfService _grf;
 
     public WorkspaceValidator(WorkspaceSession session, SchemaRegistry schemas, ReferenceIndex references,
-        ClientItemService client, MobSpriteService mobSprite, SpriteLinkService sprite, GrfService grf)
+        ClientItemService client, ClientSkillService clientSkills, MobSpriteService mobSprite, SpriteLinkService sprite, GrfService grf)
     {
         _session = session;
         _schemas = schemas;
         _references = references;
         _client = client;
+        _clientSkills = clientSkills;
         _mobSprite = mobSprite;
         _sprite = sprite;
         _grf = grf;
@@ -57,6 +61,7 @@ public sealed class WorkspaceValidator
 
         ValidateItemClientFiles(issues, scope);
         ValidateMobClientFiles(issues, scope);
+        ValidateClientSkills(issues, scope);
 
         return new ValidationReport(issues);
     }
@@ -82,6 +87,7 @@ public sealed class WorkspaceValidator
 
         if (wanted.Contains("item_db")) ValidateItemClientFiles(issues, scope);
         if (wanted.Contains("mob_db")) ValidateMobClientFiles(issues, scope);
+        if (wanted.Contains("skill_db")) ValidateClientSkills(issues, scope);
 
         return new ValidationReport(issues);
     }
@@ -106,7 +112,7 @@ public sealed class WorkspaceValidator
                     "Item doesn't exist in Client Items (itemInfo.lua / itemInfo_C.lua) — it will show no name or description in-game.")
                 {
                     RuleId = "XFILE.ITEM_NO_CLIENTTEXT",
-                    Fix = new QuickFix("Create client text", () => CreateClientText(rec)),
+                    Fix = new QuickFix("Create client text", () => CreateClientText(rec), () => _client.Remove(id)),
                 });
                 continue;
             }
@@ -115,12 +121,15 @@ public sealed class WorkspaceValidator
 
             int slots = rec.GetInt("Slots");
             if (entry.SlotCount != slots)
+            {
+                int oldSlots = entry.SlotCount;
                 issues.Add(new ValidationIssue(ValidationSeverity.Warning, "item_db", key, "SlotCount",
                     $"Slots count mismatch — Server [{slots}], Client [{entry.SlotCount}].")
                 {
                     RuleId = "XFILE.SLOTCOUNT_MISMATCH",
-                    Fix = new QuickFix($"Set client slots to {slots}", () => SetClientSlot(id, slots)),
+                    Fix = new QuickFix($"Set client slots to {slots}", () => SetClientSlot(id, slots), () => SetClientSlot(id, oldSlots)),
                 });
+            }
 
             var loc = rec.GetSet("Locations");
             bool isHeadgear = loc is not null
@@ -133,13 +142,16 @@ public sealed class WorkspaceValidator
             // generic items the two are independent — so don't flag a mismatch there.
             int view = rec.GetInt("View");
             if ((isHeadgear || isGarment) && entry.ClassNum != view)
+            {
+                int oldView = entry.ClassNum;
                 issues.Add(new ValidationIssue(ValidationSeverity.Warning, "item_db", key, "ClassNum",
                     $"View / ClassNum mismatch — Server View [{view}], Client ClassNum [{entry.ClassNum}]. " +
                     "For headgear and garments these must match or the equipped sprite won't appear.")
                 {
                     RuleId = "XFILE.CLASSNUM_MISMATCH",
-                    Fix = new QuickFix($"Set client ClassNum to {view}", () => SetClientClassNum(id, view)),
+                    Fix = new QuickFix($"Set client ClassNum to {view}", () => SetClientClassNum(id, view), () => SetClientClassNum(id, oldView)),
                 });
+            }
 
             if (_grf.IsConfigured && !string.IsNullOrEmpty(entry.IdentifiedResourceName)
                 && !_grf.Exists(GrfAssetPaths.ItemIcon(entry.IdentifiedResourceName)))
@@ -176,6 +188,76 @@ public sealed class WorkspaceValidator
                 Fix = string.IsNullOrEmpty(aegis) ? null
                     : new QuickFix("Register mob sprite", () => _mobSprite.RegisterMob(id, aegis, aegis)),
             });
+        }
+    }
+
+    /// <summary>Client skill validation: the Core internal-consistency rules plus a cross-check against the
+    /// server skill_db (orphan SKID id, max-level mismatch, aegis mismatch). In CustomOnly scope only the
+    /// user's edited/created skills are checked (so the panel isn't flooded by the official translation's
+    /// pre-existing quirks); a full scan checks everything.</summary>
+    private void ValidateClientSkills(List<ValidationIssue> issues, ValidationScope scope)
+    {
+        if (!_clientSkills.IsAvailable) return;
+        if (scope == ValidationScope.CustomOnly && !_clientSkills.IsDirty) return; // nothing the user touched — skip the load
+
+        var tables = _clientSkills.SnapshotTables();
+        var edited = _clientSkills.EditedConstants();
+        bool InScope(string constant) => scope != ValidationScope.CustomOnly || edited.Contains(constant);
+
+        foreach (var issue in ClientSkillValidator.Validate(tables))
+            if (InScope(issue.Key))
+                issues.Add(issue);
+
+        // Cross-check against the server skill_db (loaded anyway).
+        if (_schemas.Get("skill_db") is not { } schema) return;
+        var server = new Dictionary<int, (string Name, int MaxLevel)>();
+        try
+        {
+            foreach (var r in _session.GetActiveOverlay(schema).Effective())
+            {
+                int sid = r.GetInt("Id");
+                if (sid != 0 && !server.ContainsKey(sid)) server[sid] = (r.GetString("Name") ?? string.Empty, r.GetInt("MaxLevel"));
+            }
+        }
+        catch { return; }
+
+        foreach (var s in tables.Skills.Values)
+        {
+            if (!s.HasInfo || !InScope(s.Constant)) continue;
+            string key = s.Constant;
+
+            if (!server.TryGetValue(s.Id, out var sv))
+            {
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning, ClientSkillValidator.DbId, key, "skill_db",
+                    $"No server skill_db entry with id {s.Id} — this client skill has no server-side definition.")
+                { RuleId = "XFILE.CSKILL_NOT_IN_SKILLDB" });
+                continue;
+            }
+
+            if (sv.MaxLevel > 0 && s.MaxLv != sv.MaxLevel)
+            {
+                int oldMaxLv = s.MaxLv;
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning, ClientSkillValidator.DbId, key, "MaxLv",
+                    $"Max level mismatch — Server [{sv.MaxLevel}], Client [{s.MaxLv}].")
+                {
+                    RuleId = "XFILE.CSKILL_MAXLV_MISMATCH",
+                    Fix = new QuickFix($"Set client MaxLv to {sv.MaxLevel}", () => SetClientSkillMaxLv(s.Constant, sv.MaxLevel), () => SetClientSkillMaxLv(s.Constant, oldMaxLv)),
+                });
+            }
+
+            if (!string.IsNullOrEmpty(sv.Name) && !string.Equals(sv.Name, s.Constant, StringComparison.Ordinal))
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning, ClientSkillValidator.DbId, key, "Name",
+                    $"Aegis mismatch — server skill #{s.Id} is '{sv.Name}', client SKID is '{s.Constant}'.")
+                { RuleId = "XFILE.CSKILL_NAME_MISMATCH" });
+        }
+    }
+
+    private void SetClientSkillMaxLv(string constant, int maxLv)
+    {
+        if (_clientSkills.Get(constant) is { } s)
+        {
+            s.MaxLv = maxLv;
+            _clientSkills.NotifyEdited(constant);
         }
     }
 

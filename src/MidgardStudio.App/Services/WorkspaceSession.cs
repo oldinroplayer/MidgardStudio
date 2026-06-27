@@ -27,17 +27,19 @@ public sealed class WorkspaceSession
         Mode = _config.DefaultMode;
         Validation = ValidationEngine.CreateDefault();
         ScriptCatalog = LoadScriptCatalog(_config);
-        ClientCodec = new LuaFileCodec(SafeCodepage(_config));
     }
 
     public EditCommandStack Commands { get; } = new();
 
-    /// <summary>The codec for loose client lua/.lub files, built from the active profile's codepage.
-    /// Rebuilt on <see cref="ApplyProfile"/> so a Korean profile reads/writes cp949, a Latin one cp1252.
-    /// Client-side services read this rather than hardcoding 1252.</summary>
-    public LuaFileCodec ClientCodec { get; private set; }
+    /// <summary>The codec for loose client lua/.lub files — ALWAYS Windows-1252. The RO client stores
+    /// sprite / icon / resource names (and the GRF stores its entry names) as cp1252 byte sequences; the
+    /// "Korean-looking" names are 1252 bytes that must round-trip verbatim so resource lookups match the
+    /// GRF (which is also read as 1252, see <see cref="MidgardStudio.Grf.GrfAssetPaths"/>). The per-profile
+    /// Display Encoding governs only how legacy non-UTF-8 SERVER YAML names are decoded — never these.</summary>
+    public LuaFileCodec ClientCodec { get; } = new(1252);
 
-    /// <summary>The active profile's client codepage, guarded so a missing/0 value falls back to 1252.</summary>
+    /// <summary>The profile's codepage used as the fallback when a SERVER YAML db isn't valid UTF-8
+    /// (a Latin-1 / EUC-KR translated item_db). Guarded so a missing/0 value falls back to 1252.</summary>
     public int ClientCodepage => SafeCodepage(_config);
 
     private static int SafeCodepage(WorkspaceConfig config) => config.ClientCodepage > 0 ? config.ClientCodepage : 1252;
@@ -66,7 +68,6 @@ public sealed class WorkspaceSession
         _modeSets.Clear();
         Commands.Clear();
         ScriptCatalog = LoadScriptCatalog(config);
-        ClientCodec = new LuaFileCodec(SafeCodepage(config)); // re-decode client files in the new profile's codepage
         WorkspaceReloaded?.Invoke();
         ModeChanged?.Invoke();
     }

@@ -1,9 +1,12 @@
 using System.Collections.ObjectModel;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MidgardStudio.App.Services;
+using MidgardStudio.Core.Commands;
 using MidgardStudio.Core.Validation;
+using MidgardStudio.Core.Validation.Validators;
 
 namespace MidgardStudio.App.ViewModels;
 
@@ -15,14 +18,26 @@ namespace MidgardStudio.App.ViewModels;
 public sealed partial class ValidationViewModel : ObservableObject
 {
     private readonly WorkspaceValidator _validator;
+    private readonly WorkspaceSession _session;
+    private readonly ClientSkillService _clientSkills;
     private List<ValidationIssue> _all = new();
+    private bool _hasRun;
+    private CancellationTokenSource? _refreshCts;
 
-    public ValidationViewModel(WorkspaceValidator validator) => _validator = validator;
+    public ValidationViewModel(WorkspaceValidator validator, WorkspaceSession session, ClientSkillService clientSkills)
+    {
+        _validator = validator;
+        _session = session;
+        _clientSkills = clientSkills;
+    }
 
     public ObservableCollection<ValidationIssue> Issues { get; } = new();
 
     /// <summary>Set by the shell so "Go to" / double-click jumps to the offending record (dbId, key).</summary>
     public Action<string, string>? Navigate { get; set; }
+
+    /// <summary>Raised after a quick-fix runs so the shell can refresh the Save / modified indicator.</summary>
+    public Action? FixApplied { get; set; }
 
     [ObservableProperty]
     private string _summary = "Run a check to validate your custom entries across the server and client files.";
@@ -70,11 +85,35 @@ public sealed partial class ValidationViewModel : ObservableObject
             WarningCount = report.WarningCount;
             InfoCount = report.InfoCount;
             ApplyFilter();
+            _hasRun = true;
         }
         finally
         {
             IsRunning = false;
         }
+
+        // Re-sync the Save / modified indicator from the real dirty sources once this run settles. Every
+        // command already fires OnCommandsChanged, but a quick-fix's re-validation (and the debounced
+        // re-validation after an undo) complete asynchronously — this guarantees the indicator reflects the
+        // settled truth and is never left stale by an async-completion race.
+        FixApplied?.Invoke();
+    }
+
+    /// <summary>Re-runs validation shortly after the data changes underneath the panel (e.g. an undo/redo
+    /// of a quick-fix), coalescing a burst of changes into one re-scan so the counts + list stay live.
+    /// No-op until the panel has been run at least once.</summary>
+    public async void RefreshAfterChange()
+    {
+        if (!_hasRun) return;
+        _refreshCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _refreshCts = cts;
+        try
+        {
+            await Task.Delay(200, cts.Token); // debounce Ctrl+Z spam
+            if (!cts.IsCancellationRequested) await Run();
+        }
+        catch (TaskCanceledException) { /* superseded by a newer change */ }
     }
 
     partial void OnShowErrorsChanged(bool value) => ApplyFilter();
@@ -103,9 +142,30 @@ public sealed partial class ValidationViewModel : ObservableObject
     [RelayCommand]
     private async Task ApplyFix(ValidationIssue? issue)
     {
-        if (issue?.Fix is null) return;
-        issue.Fix.Apply();
+        if (issue?.Fix is not { } fix) return;
+
+        // Route the fix through the undo stack (when it's reversible) so it gets undo/redo and lights the
+        // Save indicator just like a manual edit. Fixes that aren't reversible (e.g. registering a sprite to
+        // disk) run directly.
+        if (fix.Revert is { } revert)
+            _session.Commands.Execute(new ListMutateCommand("Quick fix: " + fix.Title,
+                () => { fix.Apply(); NotifyServices(issue); },
+                () => { revert(); NotifyServices(issue); }));
+        else
+        {
+            fix.Apply();
+            NotifyServices(issue);
+        }
+
+        FixApplied?.Invoke();
         await RunCommand.ExecuteAsync(null); // re-validate so the list reflects the fix
+    }
+
+    /// <summary>Core client-skill fixes mutate the POCO directly; poke the service so its dirty signature updates.</summary>
+    private void NotifyServices(ValidationIssue issue)
+    {
+        if (issue.DbId == ClientSkillValidator.DbId && !string.IsNullOrEmpty(issue.Key))
+            _clientSkills.NotifyEdited(issue.Key);
     }
 
     [RelayCommand]

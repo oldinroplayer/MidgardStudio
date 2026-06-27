@@ -61,7 +61,8 @@
                           VirtualizingPanel.ScrollUnit="Pixel"
                           ScrollViewer.VerticalScrollBarVisibility="Visible"
                           ScrollViewer.IsDeferredScrollingEnabled="False"
-                          common:ListBehaviors.SelectOnRightClick="True">
+                          common:ListBehaviors.SelectOnRightClick="True"
+                          common:ListBehaviors.FocusSelection="True">
                     <ListView.InputBindings>
                         <KeyBinding Key="N" Modifiers="Control" Command="{Binding AddCustomCommand}" />
                         <KeyBinding Key="D" Modifiers="Control" Command="{Binding DuplicateCommand}" />

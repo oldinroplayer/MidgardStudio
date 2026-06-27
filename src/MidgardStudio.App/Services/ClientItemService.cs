@@ -126,6 +126,15 @@ public sealed class ClientItemService
         _signatureCache = null;
     }
 
+    /// <summary>Removes a client entry entirely (undoes a "Create client text" quick-fix so it doesn't
+    /// leave a phantom custom entry behind).</summary>
+    public void Remove(int id)
+    {
+        ClientFile.Custom.Remove(id);
+        ClientFile.Override.Remove(id);
+        _signatureCache = null;
+    }
+
     public void StageSave(FileTransaction tx)
     {
         if (_file is null) return;

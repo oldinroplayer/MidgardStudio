@@ -1,0 +1,228 @@
+<UserControl x:Class="MidgardStudio.App.Views.ClientSkillsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:vm="clr-namespace:MidgardStudio.App.ViewModels"
+             xmlns:common="clr-namespace:MidgardStudio.App.Common"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:ClientSkillsViewModel}">
+
+    <UserControl.Resources>
+        <!-- A per-level value field: an enable toggle + one small box per level + a "Fill" shortcut. -->
+        <DataTemplate DataType="{x:Type vm:PerLevelFieldViewModel}">
+            <StackPanel Margin="0,0,0,10">
+                <DockPanel Margin="0,0,0,3">
+                    <CheckBox Content="{Binding Label}" IsChecked="{Binding Enabled}" VerticalAlignment="Center" FontWeight="SemiBold" />
+                    <ui:Button DockPanel.Dock="Right" Content="Fill →" Appearance="Transparent" Padding="6,1" FontSize="11"
+                               Command="{Binding FillCommand}" ToolTip="Copy level 1 to every level"
+                               Visibility="{Binding Enabled, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock Text="{Binding Hint}" Opacity="0.45" FontSize="10.5" Margin="8,0,0,0" VerticalAlignment="Center"
+                               Visibility="{Binding Enabled, Converter={StaticResource BoolToVis}}" />
+                </DockPanel>
+                <ItemsControl ItemsSource="{Binding Cells}" Visibility="{Binding Enabled, Converter={StaticResource BoolToVis}}">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="0,0,5,5" Width="50">
+                                <TextBlock Text="{Binding Level, StringFormat='Lv{0}'}" FontSize="9" Opacity="0.55" HorizontalAlignment="Center" />
+                                <ui:TextBox Text="{Binding Value, UpdateSourceTrigger=LostFocus}" Padding="2" HorizontalContentAlignment="Center"
+                                            FontFamily="Consolas" ClearButtonEnabled="False" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                    Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}">
+            <ui:ProgressRing IsIndeterminate="True" Width="48" Height="48" />
+            <TextBlock Text="Loading client skills…" Opacity="0.7" Margin="0,12,0,0" HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <Grid Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}, ConverterParameter=invert}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="340" MinWidth="280" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" MinWidth="420" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Master list -->
+            <DockPanel Grid.Column="0" Margin="0,0,8,0">
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,8,0">
+                        <ui:Button Command="{Binding AddCustomCommand}" Margin="0,0,4,0" ToolTip="Add a new custom skill (Ctrl+N)">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Add24" /></ui:Button.Icon>
+                        </ui:Button>
+                        <ui:Button Command="{Binding CopyLuaCommand}" Margin="0,0,4,0" ToolTip="Copy this skill's Lua blocks (Ctrl+L)">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="ClipboardLink24" /></ui:Button.Icon>
+                        </ui:Button>
+                    </StackPanel>
+                    <ui:TextBox Grid.Column="1" Tag="ListSearch" PlaceholderText="Search id / constant / name…  (Ctrl+F)"
+                                Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" />
+                </Grid>
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}" Opacity="0.6" Margin="2,6,0,0" FontSize="11" />
+                <ListView x:Name="MasterList" ItemsSource="{Binding Rows}"
+                          SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                          common:ListBehaviors.FocusSelection="True"
+                          Background="Transparent" BorderThickness="0"
+                          ItemContainerStyle="{StaticResource MasterListItem}"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling"
+                          VirtualizingPanel.ScrollUnit="Pixel"
+                          ScrollViewer.VerticalScrollBarVisibility="Visible">
+                    <ListView.InputBindings>
+                        <KeyBinding Key="N" Modifiers="Control" Command="{Binding AddCustomCommand}" />
+                        <KeyBinding Key="L" Modifiers="Control" Command="{Binding CopyLuaCommand}" />
+                        <KeyBinding Key="E" Modifiers="Control" Command="{Binding SelectInSkillsCommand}" />
+                        <KeyBinding Key="Delete" Command="{Binding DeleteEntryCommand}" />
+                    </ListView.InputBindings>
+                    <ListView.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Add custom" InputGestureText="Ctrl+N"
+                                      Command="{Binding PlacementTarget.DataContext.AddCustomCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                                <MenuItem.Icon><ui:SymbolIcon Symbol="Add24" /></MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Copy Lua" InputGestureText="Ctrl+L"
+                                      Command="{Binding PlacementTarget.DataContext.CopyLuaCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                                <MenuItem.Icon><ui:SymbolIcon Symbol="ClipboardLink24" /></MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Delete (custom only)" InputGestureText="Del"
+                                      Command="{Binding PlacementTarget.DataContext.DeleteEntryCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                                <MenuItem.Icon><ui:SymbolIcon Symbol="Delete24" /></MenuItem.Icon>
+                            </MenuItem>
+                            <Separator />
+                            <MenuItem Header="Select in Skills" InputGestureText="Ctrl+E"
+                                      Command="{Binding PlacementTarget.DataContext.SelectInSkillsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      ToolTip="Jump to this skill in the server Skills (skill_db) section">
+                                <MenuItem.Icon><ui:SymbolIcon Symbol="Open24" /></MenuItem.Icon>
+                            </MenuItem>
+                        </ContextMenu>
+                    </ListView.ContextMenu>
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="" Width="44">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Border CornerRadius="3" Padding="5,1" Background="#338D2DF2" HorizontalAlignment="Left"
+                                                Visibility="{Binding IsCustom, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Text="NEW" FontSize="9.5" FontWeight="SemiBold" Opacity="0.9" />
+                                        </Border>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="ID" Width="60" DisplayMemberBinding="{Binding Id}" />
+                            <GridViewColumn Header="Name" Width="190" DisplayMemberBinding="{Binding Name}" />
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+            </DockPanel>
+
+            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="#22FFFFFF" />
+
+            <!-- Detail -->
+            <Grid Grid.Column="2" Margin="8,0,0,0">
+                <TextBlock Text="Select a skill to edit its client info." Opacity="0.5"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Visibility="{Binding HasEditor, Converter={StaticResource BoolToVis}, ConverterParameter=invert}" />
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,8,0"
+                              Visibility="{Binding HasEditor, Converter={StaticResource BoolToVis}}">
+                    <StackPanel DataContext="{Binding Editor}" TextElement.FontSize="12">
+
+                        <DockPanel Margin="0,0,0,10">
+                            <ui:Button DockPanel.Dock="Right" Content="Copy Lua" Appearance="Transparent" Padding="10,4"
+                                       Command="{Binding CopyLuaCommand}" ToolTip="Copy this skill's Lua blocks to the clipboard">
+                                <ui:Button.Icon><ui:SymbolIcon Symbol="ClipboardLink24" /></ui:Button.Icon>
+                            </ui:Button>
+                            <TextBlock Text="{Binding Header}" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
+                        </DockPanel>
+
+                        <!-- Info -->
+                        <ui:Card Padding="12,10">
+                            <StackPanel>
+                                <TextBlock Text="Skill info  (skillinfolist.lub)" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Display name" Opacity="0.8" Margin="0,0,0,2" />
+                                        <ui:TextBox Text="{Binding SkillName, UpdateSourceTrigger=LostFocus}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Max level" Opacity="0.8" Margin="0,0,0,2" />
+                                        <ui:TextBox Text="{Binding MaxLv, UpdateSourceTrigger=LostFocus}" Width="72"
+                                                    ToolTip="Changing this resizes the per-level fields below" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <ContentControl Content="{Binding SpField}" />
+                                <ContentControl Content="{Binding RangeField}" />
+
+                                <Border Height="1" Background="#15FFFFFF" Margin="0,4,0,10" />
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock Text="Prerequisites" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <TextBlock Text="skills the player must learn first" Opacity="0.45" FontSize="10.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                </DockPanel>
+                                <ItemsControl ItemsSource="{Binding Prereqs}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="#10FFFFFF" CornerRadius="5" Padding="8,3" Margin="0,2">
+                                                <DockPanel LastChildFill="True">
+                                                    <ui:Button DockPanel.Dock="Right" Appearance="Transparent" Padding="5,2" Command="{Binding RemoveCommand}" ToolTip="Remove prerequisite">
+                                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" FontSize="13" /></ui:Button.Icon>
+                                                    </ui:Button>
+                                                    <ui:TextBox DockPanel.Dock="Right" Text="{Binding Level, UpdateSourceTrigger=LostFocus}" Width="58"
+                                                                HorizontalContentAlignment="Center" ClearButtonEnabled="False" ToolTip="Required level" />
+                                                    <TextBlock DockPanel.Dock="Right" Text="Lv" VerticalAlignment="Center" Opacity="0.6" Margin="10,0,4,0" />
+                                                    <TextBlock Text="{Binding Display}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                </DockPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <ui:Button Content="Add prerequisite" Command="{Binding AddPrereqCommand}" Appearance="Secondary" Margin="0,6,0,0">
+                                    <ui:Button.Icon><ui:SymbolIcon Symbol="Add24" /></ui:Button.Icon>
+                                </ui:Button>
+                            </StackPanel>
+                        </ui:Card>
+
+                        <!-- Description -->
+                        <ui:Card Padding="12,10" Margin="0,10,0,0">
+                            <StackPanel>
+                                <TextBlock Text="Description  (skilldescript.lub)" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                <TextBlock Text="One line per row. Color codes like ^777777…^000000 are supported." Opacity="0.55" FontSize="11" Margin="0,0,0,4" />
+                                <ui:TextBox Text="{Binding Description, UpdateSourceTrigger=LostFocus}"
+                                            AcceptsReturn="True" MinHeight="140" MaxHeight="260" FontFamily="Consolas"
+                                            VerticalScrollBarVisibility="Auto" />
+                            </StackPanel>
+                        </ui:Card>
+
+                        <!-- Delays -->
+                        <ui:Card Padding="12,10" Margin="0,10,0,12">
+                            <StackPanel>
+                                <TextBlock Text="Cast / delay  (skilldelaylist.lub)" Style="{StaticResource SectionTitle}" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBlock Text="Tick a timing to enable it, then set per-level milliseconds. Untouched timings are left out." Opacity="0.55" FontSize="11" Margin="0,0,0,8" />
+                                <ContentControl Content="{Binding CastFixedField}" />
+                                <ContentControl Content="{Binding CastVarField}" />
+                                <ContentControl Content="{Binding GlobalCdField}" />
+                                <ContentControl Content="{Binding SingleCdField}" />
+                            </StackPanel>
+                        </ui:Card>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

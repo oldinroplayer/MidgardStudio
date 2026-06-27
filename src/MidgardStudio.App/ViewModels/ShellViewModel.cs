@@ -28,6 +28,7 @@ public partial class ShellViewModel : ObservableObject
     private readonly ValidationViewModel _validation;
     private readonly WorkspaceValidator _validator;
     private readonly ClientItemService _clientItems;
+    private readonly ClientSkillService _clientSkills;
     private readonly GrfImageService _images;
     private readonly SpriteLinkService _sprite;
     private readonly MobSpriteService _mobSprite;
@@ -41,6 +42,7 @@ public partial class ShellViewModel : ObservableObject
     private readonly System.Windows.Threading.DispatcherTimer _intervalSaveTimer = new();
     private readonly System.Windows.Threading.DispatcherTimer _editSaveTimer = new();
     private ClientItemsViewModel? _clientItemsVm;
+    private ClientSkillsViewModel? _clientSkillsVm;
     private ComboEditorViewModel? _comboVm;
     private BackupManagerViewModel? _backupVm;
     private ForgeViewModel? _forgeVm;
@@ -101,6 +103,7 @@ public partial class ShellViewModel : ObservableObject
 
     public ShellViewModel(IWorkspaceConfigService config, SchemaRegistry schemas, WorkspaceSession session,
         ReferenceResolver references, GrfBrowserViewModel grfBrowser, ClientItemService clientItems,
+        ClientSkillService clientSkills,
         GrfImageService images, SpriteLinkService sprite, MobSpriteService mobSprite, ValidationViewModel validation,
         WorkspaceValidator validator,
         DropService drops, BackupService backups, MapCacheService mapCache, AppSettingsService appSettings,
@@ -114,6 +117,7 @@ public partial class ShellViewModel : ObservableObject
         _validation = validation;
         _validator = validator;
         _clientItems = clientItems;
+        _clientSkills = clientSkills;
         _images = images;
         _sprite = sprite;
         _mobSprite = mobSprite;
@@ -150,8 +154,12 @@ public partial class ShellViewModel : ObservableObject
                 Exit();
         };
         _validation.Navigate = NavigateToIssue;
+        _validation.FixApplied = OnFixApplied;
 
         _session.Commands.Changed += OnCommandsChanged;
+        // After an undo/redo, re-validate if the Validation panel is open so its counts + list reflect the
+        // reverted model (a quick-fix re-validates on apply, but undo wouldn't otherwise update the panel).
+        _session.Commands.UndoRedoPerformed += () => { if (ReferenceEquals(CurrentContent, _validation)) _validation.RefreshAfterChange(); };
 
         var active = config.ActiveProfile;
         if (active is not null && active.Paths.AllExist())
@@ -186,7 +194,9 @@ public partial class ShellViewModel : ObservableObject
 
     private void OnCommandsChanged()
     {
-        IsModified = _session.Commands.IsModified;
+        // Include client dirtiness so the modified indicator matches the Save button (which is gated on
+        // HasUnsavedChanges) — e.g. a client-only edit/undo keeps the two in sync.
+        IsModified = _session.Commands.IsModified || _clientItems.IsDirty || _clientSkills.IsDirty;
         UndoCommand.NotifyCanExecuteChanged();
         RedoCommand.NotifyCanExecuteChanged();
         SaveCommand.NotifyCanExecuteChanged(); // grey the Save button out when there's nothing to write
@@ -241,6 +251,9 @@ public partial class ShellViewModel : ObservableObject
         Sections.Add(new("skills", "Skills", SymbolRegular.Flash24,
             "Skill database (skill_db).",
             re("skill_db.yml"), schemaId: "skill_db"));
+        Sections.Add(new("client_skills", "Client Skills", SymbolRegular.BookStar24,
+            "Client skill info (skillinfoz): names, max level, SP cost, range, prerequisites, descriptions and cast/delay timings.",
+            string.Empty));
         Sections.Add(new("achievements", "Achievements", SymbolRegular.Trophy24,
             "Achievement database (achievement_db): targets, dependencies and rewards.",
             re("achievement_db.yml"), schemaId: "achievement_db"));
@@ -288,6 +301,14 @@ public partial class ShellViewModel : ObservableObject
             return;
         }
 
+        if (section?.Key == "client_skills")
+        {
+            _clientSkillsVm ??= new ClientSkillsViewModel(_session, _clientSkills, NavigateTo);
+            CurrentContent = _clientSkillsVm;
+            _ = _clientSkillsVm.EnsureLoadedAsync();
+            return;
+        }
+
         if (section?.Key == "combos")
         {
             _comboVm ??= new ComboEditorViewModel(_session, _schemas.Get("item_combos")!, _drops);
@@ -302,7 +323,7 @@ public partial class ShellViewModel : ObservableObject
             if (!_workspaces.TryGetValue(id, out var workspace))
             {
                 workspace = new DbWorkspaceViewModel(_session, schema, _references, _clientItems, _images,
-                    _mobSprite, _drops, NavigateTo);
+                    _mobSprite, _drops, NavigateTo, _clientSkills);
                 _workspaces[id] = workspace;
             }
 
@@ -447,6 +468,8 @@ public partial class ShellViewModel : ObservableObject
         _workspaces.Clear();
         _clientItemsVm?.Dispose();
         _clientItemsVm = null; // rebuilt against the new mode/profile on next visit
+        _clientSkillsVm?.Dispose();
+        _clientSkillsVm = null;
         _comboVm?.Dispose();
         _comboVm = null;
         _forgeVm = null;
@@ -466,7 +489,7 @@ public partial class ShellViewModel : ObservableObject
     /// <summary>True when there are server or client edits not yet written to disk. Client dirtiness is a
     /// content comparison (<see cref="ClientItemService.IsDirty"/>), so undoing a client edit back to
     /// baseline correctly clears it instead of leaving Save lit.</summary>
-    public bool HasUnsavedChanges => _session.Commands.IsModified || _clientItems.IsDirty;
+    public bool HasUnsavedChanges => _session.Commands.IsModified || _clientItems.IsDirty || _clientSkills.IsDirty;
 
     /// <summary>Gate for the Save command — disabled (greyed out) when nothing has changed.</summary>
     private bool CanSave() => HasUnsavedChanges;
@@ -480,7 +503,8 @@ public partial class ShellViewModel : ObservableObject
         // the dirty flags are cleared by SaveAll, so this must run first.
         var saveTargets = _session.DirtySaveTargets();
         bool clientDirty = _clientItems.IsDirty;
-        if (saveTargets.Count == 0 && !clientDirty)
+        bool clientSkillDirty = _clientSkills.IsDirty;
+        if (saveTargets.Count == 0 && !clientDirty && !clientSkillDirty)
         {
             IsModified = _session.Commands.IsModified;
             SaveCommand.NotifyCanExecuteChanged();
@@ -488,19 +512,20 @@ public partial class ShellViewModel : ObservableObject
         }
 
         // Only a manual save is gated. Auto-save timers and exit-save pass gated:false and are never blocked.
-        if (gated && !RunSaveGate(saveTargets, clientDirty))
+        if (gated && !RunSaveGate(saveTargets, clientDirty, clientSkillDirty))
             return false;
 
         try
         {
             _session.SaveAll();      // server import YAML (only modified DBs are rewritten)
             _clientItems.Save();     // client itemInfo_C.lua (spliced in place — never overwrites functions)
+            _clientSkills.Save();    // client skillinfoz lua (spliced in place)
         }
         catch (Exception ex)
         {
             Serilog.Log.Error(ex, "Save failed");
             // Never report a failed/partial save as clean: keep whatever is still dirty so the user can retry.
-            IsModified = _session.Commands.IsModified || _clientItems.IsDirty;
+            IsModified = _session.Commands.IsModified || _clientItems.IsDirty || _clientSkills.IsDirty;
             SaveCommand.NotifyCanExecuteChanged();
             // Background auto-save (interval/on-edit) must not pop a modal every tick when a file is locked
             // (e.g. a running server) — it just logs and leaves the Save button lit. Only interactive saves alert.
@@ -512,7 +537,7 @@ public partial class ShellViewModel : ObservableObject
         }
 
         // OR client dirtiness in so a half-failed save can never be shown as a clean state.
-        IsModified = _session.Commands.IsModified || _clientItems.IsDirty;
+        IsModified = _session.Commands.IsModified || _clientItems.IsDirty || _clientSkills.IsDirty;
         SaveCommand.NotifyCanExecuteChanged();
 
         // The list of files this save wrote, with friendly labels — reused for the backup note + summary.
@@ -520,6 +545,7 @@ public partial class ShellViewModel : ObservableObject
             .Select(t => new Views.SaveSummaryDialog.SavedFile(_schemas.Get(t.Id)?.DisplayName ?? t.Id, t.ImportFilePath))
             .ToList();
         if (clientDirty) written.Add(new("Client items", _clientItems.SaveTargetPath));
+        if (clientSkillDirty) written.Add(new("Client skills", _clientSkills.SaveTargetPath));
 
         // Snapshot the freshly-saved state into a dated, self-describing backup (manual saves only).
         if (createBackup)
@@ -550,7 +576,7 @@ public partial class ShellViewModel : ObservableObject
     /// <summary>The soft/hard save gate. If the databases about to be written contain Error-level validation
     /// issues, prompts (soft gate) or blocks (hard gate). Returns true to proceed with the save. Validation
     /// failures themselves never block a save.</summary>
-    private bool RunSaveGate(IReadOnlyList<(string Id, string ImportFilePath)> saveTargets, bool clientDirty)
+    private bool RunSaveGate(IReadOnlyList<(string Id, string ImportFilePath)> saveTargets, bool clientDirty, bool clientSkillDirty)
     {
         var settings = _appSettings.Settings;
         if (!settings.ValidateOnSave || settings.SaveGate == ValidationGateMode.Advisory)
@@ -558,6 +584,7 @@ public partial class ShellViewModel : ObservableObject
 
         var dbIds = saveTargets.Select(t => t.Id).ToList();
         if (clientDirty && !dbIds.Contains("item_db")) dbIds.Add("item_db");
+        if (clientSkillDirty && !dbIds.Contains("skill_db")) dbIds.Add("skill_db"); // pulls in the client-skill cross-check
         if (dbIds.Count == 0) return true;
 
         MidgardStudio.Core.Validation.ValidationReport report;
@@ -736,7 +763,7 @@ public partial class ShellViewModel : ObservableObject
             if (!_workspaces.TryGetValue(id, out var workspace))
             {
                 workspace = new DbWorkspaceViewModel(_session, schema, _references, _clientItems, _images,
-                    _mobSprite, _drops, NavigateTo);
+                    _mobSprite, _drops, NavigateTo, _clientSkills);
                 _workspaces[id] = workspace;
             }
             // One malformed database must not stop the rest from being indexed for search.
@@ -774,9 +801,21 @@ public partial class ShellViewModel : ObservableObject
             workspace.SelectRow(key);
         else if (section.Key == "client_items")
             _clientItemsVm?.SelectRow(key);
+        else if (section.Key == "client_skills")
+            _clientSkillsVm?.SelectRow(key);
     }
 
     /// <summary>Navigates to the record behind a validation issue, resolving the int/string key from the schema.</summary>
+    /// <summary>After a validation quick-fix runs, refresh the Save / modified indicator + undo/redo state
+    /// (command-routed fixes also fire <see cref="OnCommandsChanged"/>; this covers the rest + client dirty).</summary>
+    private void OnFixApplied()
+    {
+        IsModified = _session.Commands.IsModified || _clientItems.IsDirty || _clientSkills.IsDirty;
+        UndoCommand.NotifyCanExecuteChanged();
+        RedoCommand.NotifyCanExecuteChanged();
+        SaveCommand.NotifyCanExecuteChanged();
+    }
+
     private void NavigateToIssue(string dbId, string key)
     {
         var schema = _schemas.Get(dbId);

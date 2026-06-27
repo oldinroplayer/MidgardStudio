@@ -71,6 +71,49 @@ public class CommandStackTests
         Assert.True(stack.IsModified);
     }
 
+    // Regression: the validation Quick Fix routes each reversible fix through the command stack as a
+    // ListMutateCommand(apply, revert). The Save button is gated on EditCommandStack.IsModified, so applying
+    // several fixes and then fully undoing them MUST return IsModified to false — otherwise the Save button
+    // (and the modified indicator) stay lit even though the model is back to its saved state.
+    [Fact]
+    public void QuickFix_style_commands_clear_modified_after_full_undo()
+    {
+        var stack = new EditCommandStack();
+        var model = new[] { 5, 5, 5 };   // three "records", each fixed (set to 1) independently
+
+        for (int i = 0; i < model.Length; i++)
+        {
+            int idx = i, old = model[idx];
+            stack.Execute(new ListMutateCommand($"fix {idx}", () => model[idx] = 1, () => model[idx] = old));
+        }
+        Assert.True(stack.IsModified);
+
+        while (stack.CanUndo) stack.Undo();
+
+        Assert.False(stack.IsModified);              // Save gate clears
+        Assert.Equal(new[] { 5, 5, 5 }, model);      // model fully reverted
+    }
+
+    // Regression for "do a fix then revert it, repeatedly": after each undo there must be nothing modified,
+    // no matter how many apply/undo cycles run (the user reported 3+ cycles sticking the Save button).
+    [Fact]
+    public void QuickFix_apply_then_revert_cycles_leave_no_residual_modified()
+    {
+        var stack = new EditCommandStack();
+        int value = 5;
+
+        for (int cycle = 0; cycle < 5; cycle++)
+        {
+            int old = value;
+            stack.Execute(new ListMutateCommand("fix", () => value = 1, () => value = old));
+            Assert.True(stack.IsModified);
+
+            stack.Undo();
+            Assert.False(stack.IsModified);          // each revert clears the Save gate
+            Assert.Equal(5, value);
+        }
+    }
+
     [Fact]
     public void Add_and_remove_commands_round_trip_through_overlay()
     {

@@ -117,12 +117,18 @@ public sealed class SchemaDrivenValidator : IRecordValidator
                     if (field.Min is { } mn && clamped < mn) clamped = mn;
                     if (field.Max is { } mx && clamped > mx) clamped = mx;
                     if (clamped != n)
+                    {
+                        object? oldVal = record.Get(field.Name);
                         issues.Add(new ValidationIssue(ValidationSeverity.Warning, dbId, key, field.Name,
                             BoundsMessage(label, n, field.Min, field.Max))
                         {
                             RuleId = "FIELD.BOUNDS",
-                            Fix = new QuickFix($"Clamp to {clamped}", () => record.Set(field.Name, (int)clamped)),
+                            // No fix on read-only base data (Full Scan): a fix can't edit base in place — the
+                            // user overrides the entry first, then fixes their custom copy.
+                            Fix = isBase ? null : new QuickFix($"Clamp to {clamped}",
+                                () => record.Set(field.Name, (int)clamped), () => record.Set(field.Name, oldVal)),
                         });
+                    }
                     break;
                 }
                 case FieldKind.Object:
@@ -150,7 +156,8 @@ public sealed class SchemaDrivenValidator : IRecordValidator
                         $"{label} is {s.Length} characters; the maximum is {maxLen}.")
                     {
                         RuleId = "FIELD.MAXLENGTH",
-                        Fix = new QuickFix($"Trim to {maxLen} characters", () => record.Set(field.Name, s[..maxLen])),
+                        Fix = isBase ? null : new QuickFix($"Trim to {maxLen} characters",
+                            () => record.Set(field.Name, s[..maxLen]), () => record.Set(field.Name, s)),
                     });
             }
         }

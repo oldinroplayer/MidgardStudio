@@ -157,9 +157,9 @@
                                       SelectedValuePath="Codepage" DisplayMemberPath="Label"
                                       SelectedValue="{Binding SelectedCodepage}"
                                       MaxWidth="360" HorizontalAlignment="Left" />
-                            <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" MaxWidth="420"
+                            <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" MaxWidth="440"
                                        HorizontalAlignment="Left" TextAlignment="Left"
-                                       Text="How the app decodes text for viewing and reads/writes the client lua files. Server database files are always saved as UTF-8. Use Korean for kRO clients, Western for Latin/translated servers." />
+                                       Text="Fallback used to read legacy, non-UTF-8 names in your server database files (e.g. a Latin-1 “Poção” or an EUC-KR item_db). Server files are saved as UTF-8; client text and icon / sprite resource names always use the standard Windows-1252." />
                         </StackPanel>
                     </ui:Card>
 

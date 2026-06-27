@@ -37,7 +37,8 @@ public sealed class ItemDbValidator : IRecordValidator
                 $"Equip Level Min ({min}) must be ≤ Max ({max}).")
             {
                 RuleId = "ITEM.LEVEL_ORDER",
-                Fix = new QuickFix($"Set Min to {max}", () => record.Set("EquipLevelMin", max)),
+                Fix = record.Origin == RecordOrigin.Base ? null : new QuickFix($"Set Min to {max}",
+                    () => record.Set("EquipLevelMin", max), () => record.Set("EquipLevelMin", min)),
             };
 
         // Renewal-aware refine caps (5/4 weapon, 2/1 armor).

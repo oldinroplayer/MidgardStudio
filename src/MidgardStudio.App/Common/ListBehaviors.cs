@@ -1,7 +1,9 @@
+using System;
 using System.Collections;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace MidgardStudio.App.Common;
 
@@ -90,5 +92,42 @@ public static class ListBehaviors
         if (GetSelectedItems(list) is not { } target) return;
         target.Clear();
         foreach (var item in list.SelectedItems) target.Add(item);
+    }
+
+    // ---- FocusSelection ----
+    // Cross-navigation ("Select in …", Ctrl+E) selects a row in the OTHER list but doesn't move keyboard
+    // focus there, so that list's shortcuts stay dead until the user clicks it. This focuses the selected
+    // container when a selection is ADDED while the list isn't already focused — exactly the cross-nav /
+    // initial-load case, and NOT search filtering (which only removes the selection, never adds one).
+
+    public static readonly DependencyProperty FocusSelectionProperty = DependencyProperty.RegisterAttached(
+        "FocusSelection", typeof(bool), typeof(ListBehaviors), new PropertyMetadata(false, OnFocusSelectionChanged));
+
+    public static void SetFocusSelection(DependencyObject o, bool value) => o.SetValue(FocusSelectionProperty, value);
+
+    public static bool GetFocusSelection(DependencyObject o) => (bool)o.GetValue(FocusSelectionProperty);
+
+    private static void OnFocusSelectionChanged(DependencyObject o, DependencyPropertyChangedEventArgs e)
+    {
+        if (o is not ListBox list) return;
+        list.SelectionChanged -= OnFocusSelectionSelectionChanged;
+        if (e.NewValue is true)
+            list.SelectionChanged += OnFocusSelectionSelectionChanged;
+    }
+
+    private static void OnFocusSelectionSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ListBox list) return;
+        if (e.AddedItems.Count == 0 || list.IsKeyboardFocusWithin) return; // a removal, or the user is already in the list
+        var item = list.SelectedItem;
+        if (item is null) return;
+
+        // Defer so a freshly-loaded (virtualized) container exists before we scroll to + focus it.
+        list.Dispatcher.BeginInvoke((Action)(() =>
+        {
+            list.ScrollIntoView(item);
+            if (list.ItemContainerGenerator.ContainerFromItem(item) is ListBoxItem container)
+                container.Focus();
+        }), DispatcherPriority.Input);
     }
 }

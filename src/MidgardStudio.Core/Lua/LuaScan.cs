@@ -12,6 +12,10 @@ public static class LuaScan
     /// <summary>One integer-keyed table member: positions of the <c>[</c>, the value's <c>{</c>, and its <c>}</c>.</summary>
     public readonly record struct IntKeyBlock(int BracketStart, int ValueOpen, int ValueClose);
 
+    /// <summary>One expression-keyed table member (<c>[SKID.X] = { ... }</c>): positions of the <c>[</c>,
+    /// the value's <c>{</c>, and its <c>}</c>.</summary>
+    public readonly record struct ExprKeyBlock(int BracketStart, int ValueOpen, int ValueClose);
+
     /// <summary>Index of the value-table's opening brace for <c>name = {</c>, or -1.</summary>
     public static int FindTableOpen(string s, string name)
     {
@@ -117,6 +121,55 @@ public static class LuaScan
                     int blockClose = FindMatchingBrace(s, j);
                     if (blockClose < 0) break;
                     if (int.TryParse(key, out int id)) blocks[id] = new IntKeyBlock(bracketStart, j, blockClose);
+                    i = blockClose + 1;
+                    continue;
+                }
+
+                i = j; // non-table value; keep scanning
+                continue;
+            }
+
+            i++;
+        }
+
+        return (blocks, end);
+    }
+
+    /// <summary>Indexes the top-level <c>[expr] = { ... }</c> members of the table opened at
+    /// <paramref name="tableOpen"/>, keyed by the trimmed raw bracket expression (e.g. <c>SKID.SM_BASH</c>).
+    /// Only expression (non-integer) keys are recorded. Single O(n) pass — no value parsing.</summary>
+    public static (Dictionary<string, ExprKeyBlock> Blocks, int TableClose) ScanExprKeyTables(string s, int tableOpen)
+    {
+        var blocks = new Dictionary<string, ExprKeyBlock>(StringComparer.Ordinal);
+        int end = FindMatchingBrace(s, tableOpen);
+        if (end < 0) return (blocks, -1);
+
+        int i = tableOpen + 1;
+        while (i < end)
+        {
+            char c = s[i];
+            if (char.IsWhiteSpace(c) || c == ',' || c == ';') { i++; continue; }
+            if (c == '-' && i + 1 < s.Length && s[i + 1] == '-') { i = SkipComment(s, i); continue; }
+            if (c == '"' || c == '\'') { i = SkipString(s, i) + 1; continue; }
+
+            if (c == '[')
+            {
+                int bracketStart = i;
+                int j = i + 1;
+                int keyStart = j;
+                while (j < end && s[j] != ']') j++;
+                string key = s.Substring(keyStart, j - keyStart).Trim();
+                j++; // past ']'
+                while (j < end && char.IsWhiteSpace(s[j])) j++;
+                if (j < end && s[j] == '=') j++;
+                while (j < end && char.IsWhiteSpace(s[j])) j++;
+
+                if (j < end && s[j] == '{')
+                {
+                    int blockClose = FindMatchingBrace(s, j);
+                    if (blockClose < 0) break;
+                    // Record expression keys only; an [int] key here is left to ScanIntKeyTables.
+                    if (key.Length > 0 && !int.TryParse(key, out _)) blocks[key] = new ExprKeyBlock(bracketStart, j, blockClose);
                     i = blockClose + 1;
                     continue;
                 }

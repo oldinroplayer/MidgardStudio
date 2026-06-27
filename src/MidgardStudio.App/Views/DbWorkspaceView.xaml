@@ -72,6 +72,7 @@
                           SelectedItem="{Binding List.SelectedRow, Mode=TwoWay}"
                           SelectionMode="Extended"
                           common:ListBehaviors.SelectedItems="{Binding List.SelectedRows}"
+                          common:ListBehaviors.FocusSelection="True"
                           Background="Transparent" BorderThickness="0"
                           ItemContainerStyle="{StaticResource MasterListItem}"
                           VirtualizingPanel.IsVirtualizing="True"
@@ -84,7 +85,7 @@
                         <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyEntryCommand}" />
                         <KeyBinding Key="D" Modifiers="Control+Shift" Command="{Binding CopyToIdCommand}" />
                         <KeyBinding Key="R" Modifiers="Control+Shift" Command="{Binding RestoreToDefaultCommand}" />
-                        <KeyBinding Key="E" Modifiers="Control" Command="{Binding SelectInClientItemsCommand}" />
+                        <KeyBinding Key="E" Modifiers="Control" Command="{Binding SelectInClientCommand}" />
                         <KeyBinding Key="E" Modifiers="Control+Shift" Command="{Binding AddInClientItemsCommand}" />
                         <KeyBinding Key="Delete" Command="{Binding DeleteEntryCommand}" />
                         <KeyBinding Key="F2" Command="{Binding ChangeIdCommand}" />
@@ -123,6 +124,10 @@
                             <MenuItem Header="Add in Client Items" InputGestureText="Ctrl+Shift+E"
                                       Visibility="{Binding PlacementTarget.DataContext.IsItemDb, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
                                       Command="{Binding PlacementTarget.DataContext.AddInClientItemsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <Separator Visibility="{Binding PlacementTarget.DataContext.IsSkillDb, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
+                            <MenuItem Header="Select in Client Skills" InputGestureText="Ctrl+E"
+                                      Visibility="{Binding PlacementTarget.DataContext.IsSkillDb, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
+                                      Command="{Binding PlacementTarget.DataContext.SelectInClientSkillsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                         </ContextMenu>
                     </ListView.ContextMenu>
                     <ListView.View>

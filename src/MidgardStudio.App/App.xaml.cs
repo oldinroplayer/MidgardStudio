@@ -148,6 +148,7 @@ public partial class App : Application
         services.AddSingleton<MidgardStudio.Grf.GrfService>();
         services.AddSingleton<Services.GrfImageService>();
         services.AddSingleton<Services.ClientItemService>();
+        services.AddSingleton<Services.ClientSkillService>();
         services.AddSingleton<Services.SpriteLinkService>();
         services.AddSingleton<Services.MobSpriteService>();
         services.AddSingleton<Services.DropService>();
