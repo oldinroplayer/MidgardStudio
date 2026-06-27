@@ -97,6 +97,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -345,7 +346,37 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="2">
+        <!-- Update banner: shown when a newer GitHub release exists; links to the releases page. -->
+        <Border Grid.Row="2" Margin="12,8,16,0" CornerRadius="8" Padding="14,8"
+                Background="#15331E" BorderBrush="#2C6B43" BorderThickness="1">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding UpdateAvailable}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <DockPanel LastChildFill="False">
+                <ui:SymbolIcon Symbol="ArrowDownload24" DockPanel.Dock="Left" Foreground="#5FD08A" FontSize="18" VerticalAlignment="Center" Margin="2,0,12,0" />
+                <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center">
+                    <TextBlock Text="Update available" FontWeight="SemiBold" Foreground="#EAF7EF" />
+                    <TextBlock Text="{Binding UpdateMessage}" Foreground="#B9D8C6" FontSize="12" />
+                </StackPanel>
+                <Button DockPanel.Dock="Right" Width="30" Height="30" Padding="0" Margin="8,0,0,0" VerticalAlignment="Center"
+                        Background="Transparent" BorderThickness="0" Command="{Binding DismissUpdateCommand}" ToolTip="Dismiss">
+                    <ui:SymbolIcon Symbol="Dismiss24" Foreground="#9FB8AC" FontSize="14" />
+                </Button>
+                <ui:Button DockPanel.Dock="Right" Content="View release" Appearance="Primary" VerticalAlignment="Center"
+                           Command="{Binding OpenUpdateCommand}">
+                    <ui:Button.Icon><ui:SymbolIcon Symbol="Open24" /></ui:Button.Icon>
+                </ui:Button>
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="248" />
                 <ColumnDefinition Width="*" />

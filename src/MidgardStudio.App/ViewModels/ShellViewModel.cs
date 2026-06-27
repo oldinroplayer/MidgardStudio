@@ -55,6 +55,15 @@ public partial class ShellViewModel : ObservableObject
     /// <summary>The app version (e.g. "v1.0.2"), shown as a pill next to the title-bar logo.</summary>
     public string AppVersion => "v" + (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0");
 
+    /// <summary>True when a newer release exists on GitHub (drives the update banner).</summary>
+    [ObservableProperty]
+    private bool _updateAvailable;
+
+    [ObservableProperty]
+    private string _updateMessage = string.Empty;
+
+    private string _updateUrl = UpdateCheckService.ReleasesPage;
+
     [ObservableProperty]
     private DbSectionViewModel? _selectedSection;
 
@@ -182,7 +191,30 @@ public partial class ShellViewModel : ObservableObject
 
         // Onboarding runs once, the first time the app is ever opened, layered above the wizard/workspace.
         ShowOnboarding = !_appSettings.Settings.HasSeenOnboarding;
+
+        _ = CheckForUpdatesAsync(); // fire-and-forget; fail-silent if offline
     }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        var info = await UpdateCheckService.CheckAsync();
+        if (info is null) return; // up to date / couldn't check — no banner
+        _updateUrl = info.Value.Url;
+        UpdateMessage = $"Version {info.Value.Version} is available — you're on {AppVersion}.";
+        UpdateAvailable = true;
+    }
+
+    /// <summary>Opens the release page in the browser and dismisses the banner.</summary>
+    [RelayCommand]
+    private void OpenUpdate()
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(_updateUrl) { UseShellExecute = true }); }
+        catch (Exception ex) { Serilog.Log.Warning(ex, "Could not open the releases page"); }
+        UpdateAvailable = false;
+    }
+
+    [RelayCommand]
+    private void DismissUpdate() => UpdateAvailable = false;
 
     /// <summary>Rebuilds the Switch-profile submenu from disk and flags the active profile.</summary>
     private void RefreshProfiles()
