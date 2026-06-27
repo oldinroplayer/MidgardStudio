@@ -151,6 +151,15 @@
                                 <RadioButton Content="Pre-Renewal" GroupName="System"
                                              IsChecked="{Binding IsRenewal, Converter={StaticResource InverseBool}}" />
                             </StackPanel>
+
+                            <TextBlock Text="Display Encoding" Style="{StaticResource FieldCaption}" Margin="0,14,0,3" />
+                            <ComboBox ItemsSource="{Binding EncodingOptions}"
+                                      SelectedValuePath="Codepage" DisplayMemberPath="Label"
+                                      SelectedValue="{Binding SelectedCodepage}"
+                                      MaxWidth="360" HorizontalAlignment="Left" />
+                            <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" MaxWidth="420"
+                                       HorizontalAlignment="Left" TextAlignment="Left"
+                                       Text="How the app decodes text for viewing and reads/writes the client lua files. Server database files are always saved as UTF-8. Use Korean for kRO clients, Western for Latin/translated servers." />
                         </StackPanel>
                     </ui:Card>
 

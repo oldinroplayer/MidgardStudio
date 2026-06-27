@@ -41,9 +41,10 @@ public sealed class LuaFileCodec
             string ch = ex.CharUnknown != '\0'
                 ? $"'{ex.CharUnknown}' (U+{(int)ex.CharUnknown:X4})"
                 : "an unsupported symbol";
+            string codec = $"{Write.EncodingName} (codepage {Codepage})";
             throw new InvalidDataException(
-                $"This text contains {ch}, which can't be saved to a Windows-1252 client file — your edit was NOT written. " +
-                "Client text must use Western (Latin-1) characters; remove the emoji or non-Western character (e.g. Korean, Chinese, Cyrillic) and save again.",
+                $"This text contains {ch}, which can't be saved to this client's {codec} encoding — your edit was NOT written. " +
+                "Remove that character (or switch the profile's Display Encoding to one that supports it) and save again.",
                 ex);
         }
     }

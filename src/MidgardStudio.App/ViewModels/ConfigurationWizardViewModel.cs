@@ -46,7 +46,21 @@ public sealed partial class ConfigurationWizardViewModel : ObservableObject
     [ObservableProperty] private string _itemInfoPath = string.Empty;
     [ObservableProperty] private string _itemInfoCustomPath = string.Empty;
     [ObservableProperty] private bool _isRenewal = true;
+    [ObservableProperty] private int _selectedCodepage = 1252;
     [ObservableProperty] private string _statusMessage = string.Empty;
+
+    /// <summary>Display Encoding choices (codepage + friendly label). Drives how the app decodes text for
+    /// viewing and how it reads/writes the loose client lua files; server YAML is always saved as UTF-8.</summary>
+    public IReadOnlyList<EncodingOption> EncodingOptions { get; } = new[]
+    {
+        new EncodingOption("Western — Windows-1252 (Latin)", 1252),
+        new EncodingOption("Korean — EUC-KR (949)", 949),
+        new EncodingOption("Cyrillic — Windows-1251", 1251),
+        new EncodingOption("Japanese — Shift-JIS (932)", 932),
+        new EncodingOption("Simplified Chinese — GBK (936)", 936),
+        new EncodingOption("Thai — Windows-874", 874),
+        new EncodingOption("Traditional Chinese — Big5 (950)", 950),
+    };
 
     /// <summary>Reloads the profile list and the editable fields (active profile, or repo defaults).</summary>
     public void Refresh()
@@ -76,6 +90,7 @@ public sealed partial class ConfigurationWizardViewModel : ObservableObject
         ItemInfoPath = cfg.Paths.ItemInfoPath;
         ItemInfoCustomPath = cfg.Paths.ItemInfoCustomPath;
         IsRenewal = cfg.DefaultMode == ServerMode.Renewal;
+        SelectedCodepage = cfg.ClientCodepage > 0 ? cfg.ClientCodepage : 1252;
         GrfPaths.Clear();
         foreach (var g in cfg.GrfPaths) GrfPaths.Add(g);
     }
@@ -178,7 +193,7 @@ public sealed partial class ConfigurationWizardViewModel : ObservableObject
             ItemInfoCustomPath = ItemInfoCustomPath.Trim(),
         },
         DefaultMode = IsRenewal ? ServerMode.Renewal : ServerMode.PreRenewal,
-        ClientCodepage = 1252,
+        ClientCodepage = SelectedCodepage > 0 ? SelectedCodepage : 1252,
         GrfPaths = GrfPaths.ToList(),
     };
 
@@ -215,3 +230,6 @@ public sealed partial class ConfigurationWizardViewModel : ObservableObject
         return dlg.ShowDialog() == true ? dlg.FileName : null;
     }
 }
+
+/// <summary>A selectable Display Encoding (codepage + friendly label) for the configuration wizard combo.</summary>
+public sealed record EncodingOption(string Label, int Codepage);

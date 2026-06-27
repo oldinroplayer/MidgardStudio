@@ -41,6 +41,18 @@ public sealed class GrfService : IDisposable
 
     public bool IsConfigured => _configured;
 
+    /// <summary>
+    /// Sets the codepage used to decode GRF entry names and lua text for display (a global in the GRF
+    /// library). Call this BEFORE (re)configuring sources so entries decode with the right encoding —
+    /// kRO archives store names as EUC-KR (949), Western/translated ones as Windows-1252. This is a
+    /// display concern only; the app never writes GRF archives.
+    /// </summary>
+    public void SetDisplayCodepage(int codepage)
+    {
+        try { EncodingService.SetDisplayEncoding(codepage > 0 ? codepage : 1252); }
+        catch { /* provider not registered / unknown codepage — keep the previous display encoding */ }
+    }
+
     /// <summary>Raised when the configured sources change, so caches built over GRF content can be dropped.</summary>
     public event Action? SourcesChanged;
 

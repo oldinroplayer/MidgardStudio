@@ -16,7 +16,7 @@ namespace MidgardStudio.App.Services;
 public sealed class ClientItemService
 {
     private readonly WorkspaceSession _session;
-    private readonly LuaFileCodec _codec = new(1252);
+    private LuaFileCodec _codec => _session.ClientCodec; // codepage follows the active profile (rebuilt on profile switch)
     private readonly ItemInfoReader _reader = new();
     private ItemInfoFile? _file;
     private OfficialItemInfo? _official;

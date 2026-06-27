@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using MidgardStudio.Core.Commands;
 using MidgardStudio.Core.Lookup;
+using MidgardStudio.Core.Lua;
 using MidgardStudio.Core.Overlay;
 using MidgardStudio.Core.Schema;
 using MidgardStudio.Core.Validation;
@@ -26,9 +27,20 @@ public sealed class WorkspaceSession
         Mode = _config.DefaultMode;
         Validation = ValidationEngine.CreateDefault();
         ScriptCatalog = LoadScriptCatalog(_config);
+        ClientCodec = new LuaFileCodec(SafeCodepage(_config));
     }
 
     public EditCommandStack Commands { get; } = new();
+
+    /// <summary>The codec for loose client lua/.lub files, built from the active profile's codepage.
+    /// Rebuilt on <see cref="ApplyProfile"/> so a Korean profile reads/writes cp949, a Latin one cp1252.
+    /// Client-side services read this rather than hardcoding 1252.</summary>
+    public LuaFileCodec ClientCodec { get; private set; }
+
+    /// <summary>The active profile's client codepage, guarded so a missing/0 value falls back to 1252.</summary>
+    public int ClientCodepage => SafeCodepage(_config);
+
+    private static int SafeCodepage(WorkspaceConfig config) => config.ClientCodepage > 0 ? config.ClientCodepage : 1252;
 
     public ValidationEngine Validation { get; }
 
@@ -54,13 +66,14 @@ public sealed class WorkspaceSession
         _modeSets.Clear();
         Commands.Clear();
         ScriptCatalog = LoadScriptCatalog(config);
+        ClientCodec = new LuaFileCodec(SafeCodepage(config)); // re-decode client files in the new profile's codepage
         WorkspaceReloaded?.Invoke();
         ModeChanged?.Invoke();
     }
 
     /// <summary>Loads (or returns cached) the ModeSet for a schema. Safe to call from a background thread.</summary>
     public ModeSet GetModeSet(DbSchema schema) =>
-        _modeSets.GetOrAdd(schema.Id, _ => _loader.LoadModeSet(schema, _config.Paths));
+        _modeSets.GetOrAdd(schema.Id, _ => _loader.LoadModeSet(schema, _config.Paths, SafeCodepage(_config)));
 
     /// <summary>The overlay for the current mode.</summary>
     public OverlayTable GetActiveOverlay(DbSchema schema) => GetModeSet(schema).For(Mode);

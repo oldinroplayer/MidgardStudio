@@ -15,11 +15,41 @@ namespace MidgardStudio.Core.Serialization;
 /// </summary>
 public sealed class YamlDbReader
 {
-    public DbFile ReadFile(string path, DbSchema schema, RecordOrigin origin = RecordOrigin.Base)
+    static YamlDbReader()
     {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-        return Read(reader, schema, origin);
+        // cp1252 / cp949 / cp1251 / … aren't built into .NET 8 — register the Windows codepage provider
+        // so the legacy-encoding fallback below (Encoding.GetEncoding) can resolve them. The App also
+        // registers this at startup; doing it here too keeps headless Core/test usage self-sufficient.
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+    }
+
+    /// <summary>
+    /// Reads a rAthena YAML database file. rAthena db files are UTF-8, so UTF-8 is tried first (strict).
+    /// Some translated private-server packs store names in a legacy codepage (e.g. a Brazilian item_db
+    /// saved as Windows-1252, a kRO db in EUC-KR); when the bytes aren't valid UTF-8 we fall back to
+    /// <paramref name="fallbackCodepage"/> so those names display correctly instead of becoming U+FFFD
+    /// replacement characters. Writing is always UTF-8 (see <see cref="YamlDbWriter"/>) — independent of
+    /// this display fallback, so the import layer this app writes stays standard.
+    /// </summary>
+    public DbFile ReadFile(string path, DbSchema schema, RecordOrigin origin = RecordOrigin.Base, int fallbackCodepage = 1252)
+        => Read(DecodeBytes(File.ReadAllBytes(path), fallbackCodepage), schema, origin);
+
+    /// <summary>Decodes db bytes as UTF-8 when valid, else as the configured legacy codepage.</summary>
+    private static string DecodeBytes(byte[] bytes, int fallbackCodepage)
+    {
+        // A UTF-8 BOM is unambiguous; strip it. Otherwise try strict UTF-8 and only fall back on bytes
+        // that can't be valid UTF-8 (a legacy single/double-byte db).
+        int start = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF ? 3 : 0;
+        try
+        {
+            return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
+                .GetString(bytes, start, bytes.Length - start);
+        }
+        catch (DecoderFallbackException)
+        {
+            try { return Encoding.GetEncoding(fallbackCodepage <= 0 ? 1252 : fallbackCodepage).GetString(bytes); }
+            catch (ArgumentException) { return Encoding.Latin1.GetString(bytes); } // unknown codepage -> Latin-1 (every byte maps)
+        }
     }
 
     public DbFile Read(string yaml, DbSchema schema, RecordOrigin origin = RecordOrigin.Base)

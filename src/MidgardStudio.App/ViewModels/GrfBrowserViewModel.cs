@@ -195,7 +195,9 @@ public sealed partial class GrfBrowserViewModel : ObservableObject
 
     public void RefreshFromConfig()
     {
-        _grf.Configure(_config.Load().GrfPaths);
+        var cfg = _config.Load();
+        _grf.SetDisplayCodepage(cfg.ClientCodepage); // decode entry names in this profile's codepage (set before re-opening)
+        _grf.Configure(cfg.GrfPaths);
 
         Sources.Clear();
         foreach (var s in _grf.Sources) Sources.Add(s);
