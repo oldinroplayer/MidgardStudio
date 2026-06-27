@@ -100,10 +100,23 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="Midgard Studio">
-            <ui:TitleBar.Icon>
-                <ui:ImageIcon Source="/Assets/logo.png" Width="20" Height="20" />
-            </ui:TitleBar.Icon>
+        <!-- Logo, title and version pill all live in the Header (one StackPanel) so the gaps between them are
+             equal — the TitleBar.Icon slot adds its own uncontrollable spacing. Title="" since the Header is
+             the visible title (WPF-UI hides its own Title when a Header is set). -->
+        <ui:TitleBar Grid.Row="0" Title="">
+            <ui:TitleBar.Header>
+                <!-- Negative left margin cancels WPF-UI TitleBar's internal content inset so the logo lines up
+                     with where "File" starts in the menu bar below. -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="-12,0,0,0">
+                    <Image Source="/Assets/logo.png" Width="20" Height="20" VerticalAlignment="Center" />
+                    <TextBlock Text="Midgard Studio" Margin="10,0,0,0" Foreground="#ECECF4" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <!-- Version pill (brand-violet tint to match the logo). -->
+                    <Border Margin="10,0,0,0" VerticalAlignment="Center" CornerRadius="8" Padding="7,1"
+                            Background="#2A2140" BorderBrush="#4C3C72" BorderThickness="1">
+                        <TextBlock Text="{Binding AppVersion}" Foreground="#BBA9E6" FontSize="11" FontWeight="Medium" />
+                    </Border>
+                </StackPanel>
+            </ui:TitleBar.Header>
         </ui:TitleBar>
 
         <!-- ===== Top menu bar (replaces the old top-right icon cluster) ===== -->

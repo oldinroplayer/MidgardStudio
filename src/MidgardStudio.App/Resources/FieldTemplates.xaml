@@ -18,6 +18,8 @@
     <common:CountToVisibilityConverter x:Key="CountToVis" />
     <common:BoolToTextWrappingConverter x:Key="BoolToWrap" />
     <common:AddOneConverter x:Key="PlusOne" />
+    <common:IssueCategoryConverter x:Key="IssueCategory" />
+    <common:IssueFileConverter x:Key="IssueFile" />
 
     <!-- Dark "magic-bento" background for script editors (a subtle purple glow over near-black) so the
          code area is themed instead of a plain white box. Reused by every script editor in the app. -->
@@ -661,9 +663,71 @@
                     <CheckBox Content="Warnings" IsChecked="{Binding ShowWarnings}" Foreground="#E8C06A" Margin="0,0,12,0" />
                     <CheckBox Content="Info" IsChecked="{Binding ShowInfos}" Foreground="#7FB2E8" />
                 </StackPanel>
+                <!-- Source filter chips: click a category to focus it (a flat, virtualized list — no folding). -->
+                <ListBox DockPanel.Dock="Top" ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}"
+                         Background="Transparent" BorderThickness="0" Margin="0,0,0,12"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="{x:Type ListBoxItem}">
+                            <Setter Property="Margin" Value="0,0,6,4" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                                        <Border x:Name="Chip" CornerRadius="11" Padding="11,3" Background="#16FFFFFF"
+                                                BorderBrush="#24FFFFFF" BorderThickness="1">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Label}" Foreground="#DCDCEC" FontSize="12" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding Count}" Foreground="#9A9AB0" FontSize="11" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Chip" Property="Background" Value="#2AFFFFFF" />
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="Chip" Property="Background" Value="#7A3FD4" />
+                                                <Setter TargetName="Chip" Property="BorderBrush" Value="#9A5FF4" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                </ListBox>
                 <Border BorderBrush="#1FFFFFFF" BorderThickness="1" CornerRadius="6" Background="#0AFFFFFF">
                     <ListView ItemsSource="{Binding Issues}" Background="Transparent" BorderThickness="0"
-                              Foreground="#E8E8F2" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                              Foreground="#E8E8F2" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                        <ListView.Resources>
+                            <!-- One shared context menu. PlacementTarget is the right-clicked ListViewItem: its Tag is
+                                 the ValidationViewModel (commands) and its DataContext is the ValidationIssue (parameter). -->
+                            <ContextMenu x:Key="IssueMenu">
+                                <MenuItem Header="Go to record"
+                                          Command="{Binding PlacementTarget.Tag.OpenCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Apply quick fix"
+                                          Visibility="{Binding PlacementTarget.DataContext.Fix, Converter={StaticResource NotNullToVis}, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          Command="{Binding PlacementTarget.Tag.ApplyFixCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <Separator />
+                                <MenuItem Header="Copy message"
+                                          Command="{Binding PlacementTarget.Tag.CopyMessageCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Copy full details"
+                                          Command="{Binding PlacementTarget.Tag.CopyDetailsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Copy location (db / key / field)"
+                                          Command="{Binding PlacementTarget.Tag.CopyLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Copy rule id"
+                                          Command="{Binding PlacementTarget.Tag.CopyRuleIdCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            </ContextMenu>
+                        </ListView.Resources>
                         <!-- Themed row container (self-contained, mirrors MasterListItem) so hover/select use the
                              app's dark surface + accent instead of the OS white Highlight brushes. -->
                         <ListView.ItemContainerStyle>
@@ -672,6 +736,9 @@
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                                 <Setter Property="SnapsToDevicePixels" Value="True" />
                                 <Setter Property="Padding" Value="2,3" />
+                                <Setter Property="ToolTip" Value="{Binding Message}" />
+                                <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=ListView}}" />
+                                <Setter Property="ContextMenu" Value="{StaticResource IssueMenu}" />
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="{x:Type ListViewItem}">
@@ -696,11 +763,41 @@
                         </ListView.ItemContainerStyle>
                         <ListView.View>
                             <GridView>
-                                <GridViewColumn Header="Severity" Width="74" DisplayMemberBinding="{Binding Severity}" />
-                                <GridViewColumn Header="Database" Width="104" DisplayMemberBinding="{Binding DbId}" />
-                                <GridViewColumn Header="Key" Width="72" DisplayMemberBinding="{Binding Key}" />
+                                <GridViewColumn Header="Severity" Width="96">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <!-- Colorized severity chip with the Save-button electric animated ring (no per-row glow halo). -->
+                                            <Border x:Name="Ring" CornerRadius="5" Padding="1.4" HorizontalAlignment="Left"
+                                                    common:GradientBorder.Enabled="True" common:GradientBorder.Glow="False">
+                                                <Border x:Name="Face" CornerRadius="4" Padding="8,1" Background="#33FFFFFF">
+                                                    <TextBlock x:Name="Sev" Text="{Binding Severity}" FontSize="11" FontWeight="SemiBold" Foreground="#E8E8F2" />
+                                                </Border>
+                                            </Border>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding Severity}" Value="Error">
+                                                    <Setter TargetName="Ring" Property="common:GradientBorder.Accent" Value="#E04848" />
+                                                    <Setter TargetName="Face" Property="Background" Value="#FAD4D4" />
+                                                    <Setter TargetName="Sev" Property="Foreground" Value="#9B1C1C" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Severity}" Value="Warning">
+                                                    <Setter TargetName="Ring" Property="common:GradientBorder.Accent" Value="#E0A41E" />
+                                                    <Setter TargetName="Face" Property="Background" Value="#FBEFC9" />
+                                                    <Setter TargetName="Sev" Property="Foreground" Value="#8A5A00" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Severity}" Value="Info">
+                                                    <Setter TargetName="Ring" Property="common:GradientBorder.Accent" Value="#3E8EE6" />
+                                                    <Setter TargetName="Face" Property="Background" Value="#D7E7FB" />
+                                                    <Setter TargetName="Sev" Property="Foreground" Value="#14508C" />
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="Database" Width="104" DisplayMemberBinding="{Binding Converter={StaticResource IssueCategory}}" />
+                                <GridViewColumn Header="ID" Width="78" DisplayMemberBinding="{Binding Key}" />
                                 <GridViewColumn Header="Field" Width="92" DisplayMemberBinding="{Binding Field}" />
-                                <GridViewColumn Header="Message" Width="470" DisplayMemberBinding="{Binding Message}" />
+                                <GridViewColumn Header="File" Width="120" DisplayMemberBinding="{Binding Converter={StaticResource IssueFile}}" />
+                                <GridViewColumn Header="Message" Width="380" DisplayMemberBinding="{Binding Message}" />
                                 <GridViewColumn Header="Actions" Width="150">
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>

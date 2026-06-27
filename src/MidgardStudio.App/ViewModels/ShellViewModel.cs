@@ -52,6 +52,9 @@ public partial class ShellViewModel : ObservableObject
 
     public ObservableCollection<DbSectionViewModel> Sections { get; } = new();
 
+    /// <summary>The app version (e.g. "v1.0.2"), shown as a pill next to the title-bar logo.</summary>
+    public string AppVersion => "v" + (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0");
+
     [ObservableProperty]
     private DbSectionViewModel? _selectedSection;
 
@@ -818,11 +821,17 @@ public partial class ShellViewModel : ObservableObject
 
     private void NavigateToIssue(string dbId, string key)
     {
+        // Some sources have no server schema (client_skills, client_items) — pick the key type per source and
+        // let NavigateTo route to the bespoke list. (A null schema used to bail, so "Go to" did nothing for
+        // client skills; client_items is keyed by numeric item id, client_skills by SKID constant.)
         var schema = _schemas.Get(dbId);
-        if (schema is null) return;
-        RecordKey rk = schema.Key is MidgardStudio.Core.Schema.IntKeyStrategy && long.TryParse(key, out var n)
-            ? RecordKey.Of(n)
-            : RecordKey.Of(key);
+        bool numeric = dbId switch
+        {
+            "client_skills" => false,
+            "client_items" => true,
+            _ => schema?.Key is MidgardStudio.Core.Schema.IntKeyStrategy,
+        };
+        RecordKey rk = numeric && long.TryParse(key, out var n) ? RecordKey.Of(n) : RecordKey.Of(key);
         NavigateTo(dbId, rk);
     }
 

@@ -108,7 +108,7 @@ public sealed class WorkspaceValidator
 
             if (!_client.Exists(id))
             {
-                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "item_db", key, "client",
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "client_items", key, "client",
                     "Item doesn't exist in Client Items (itemInfo.lua / itemInfo_C.lua) — it will show no name or description in-game.")
                 {
                     RuleId = "XFILE.ITEM_NO_CLIENTTEXT",
@@ -123,7 +123,7 @@ public sealed class WorkspaceValidator
             if (entry.SlotCount != slots)
             {
                 int oldSlots = entry.SlotCount;
-                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "item_db", key, "SlotCount",
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "client_items", key, "SlotCount",
                     $"Slots count mismatch — Server [{slots}], Client [{entry.SlotCount}].")
                 {
                     RuleId = "XFILE.SLOTCOUNT_MISMATCH",
@@ -144,7 +144,7 @@ public sealed class WorkspaceValidator
             if ((isHeadgear || isGarment) && entry.ClassNum != view)
             {
                 int oldView = entry.ClassNum;
-                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "item_db", key, "ClassNum",
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "client_items", key, "ClassNum",
                     $"View / ClassNum mismatch — Server View [{view}], Client ClassNum [{entry.ClassNum}]. " +
                     "For headgear and garments these must match or the equipped sprite won't appear.")
                 {
@@ -155,12 +155,12 @@ public sealed class WorkspaceValidator
 
             if (_grf.IsConfigured && !string.IsNullOrEmpty(entry.IdentifiedResourceName)
                 && !_grf.Exists(GrfAssetPaths.ItemIcon(entry.IdentifiedResourceName)))
-                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "item_db", key, "icon",
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "client_items", key, "icon",
                     $"Inventory icon '{entry.IdentifiedResourceName}.bmp' not found in the configured GRF.")
                 { RuleId = "XFILE.ICON_MISSING" });
 
             if (isHeadgear && view > 0 && _sprite.IsAvailable && !mappedViews.Contains(view))
-                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "item_db", key, "View",
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "client_items", key, "View",
                     $"Headgear View {view} is not mapped in accessoryid.lub / accname.lub — the sprite won't show.")
                 { RuleId = "XFILE.HEADGEAR_NO_ACCMAP" });
         }
@@ -185,6 +185,7 @@ public sealed class WorkspaceValidator
                 "Custom mob is not registered in npcidentity.lub — the client will fail to load its sprite.")
             {
                 RuleId = "XFILE.MOB_NOT_REGISTERED",
+                Category = "Client Mobs", // DbId stays mob_db so "Go to" opens the Monsters list (no Client Mobs tab)
                 Fix = string.IsNullOrEmpty(aegis) ? null
                     : new QuickFix("Register mob sprite", () => _mobSprite.RegisterMob(id, aegis, aegis)),
             });

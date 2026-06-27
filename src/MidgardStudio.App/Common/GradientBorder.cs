@@ -24,16 +24,48 @@ public static class GradientBorder
     private static readonly Brush Idle = Frozen(new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x00)));
 
     public static readonly DependencyProperty EnabledProperty = DependencyProperty.RegisterAttached(
-        "Enabled", typeof(bool), typeof(GradientBorder), new PropertyMetadata(false, OnEnabledChanged));
+        "Enabled", typeof(bool), typeof(GradientBorder), new PropertyMetadata(false, OnChanged));
 
     public static bool GetEnabled(DependencyObject o) => (bool)o.GetValue(EnabledProperty);
     public static void SetEnabled(DependencyObject o, bool value) => o.SetValue(EnabledProperty, value);
 
-    private static void OnEnabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    /// <summary>When true (default), the animated edge also gets a pulsing glow halo. Set false for the
+    /// rotating gradient edge alone — used by the validation severity badges, where a per-row glow would both
+    /// wash out the severity colour and stack dozens of drop-shadows in the list.</summary>
+    public static readonly DependencyProperty GlowProperty = DependencyProperty.RegisterAttached(
+        "Glow", typeof(bool), typeof(GradientBorder), new PropertyMetadata(true, OnChanged));
+
+    public static bool GetGlow(DependencyObject o) => (bool)o.GetValue(GlowProperty);
+    public static void SetGlow(DependencyObject o, bool value) => o.SetValue(GlowProperty, value);
+
+    /// <summary>Tints the animated edge to a single accent colour instead of the brand violet gradient
+    /// (e.g. red/amber/blue per validation severity). Transparent (default) keeps the brand gradient.</summary>
+    public static readonly DependencyProperty AccentProperty = DependencyProperty.RegisterAttached(
+        "Accent", typeof(Color), typeof(GradientBorder), new PropertyMetadata(Colors.Transparent, OnChanged));
+
+    public static Color GetAccent(DependencyObject o) => (Color)o.GetValue(AccentProperty);
+    public static void SetAccent(DependencyObject o, Color value) => o.SetValue(AccentProperty, value);
+
+    // One animated brush per distinct accent, SHARED across every element that uses it (e.g. all error badges
+    // share one brush) — so a long virtualized list runs ~4 animation clocks, not one per visible row, and a
+    // recycled container reuses the brush instead of allocating a new one on every scroll step.
+    private static readonly System.Collections.Generic.Dictionary<int, Brush> BrushCache = new();
+
+    private static Brush RotatingFor(Color accent)
     {
-        bool on = e.NewValue is true;
-        Brush background = on ? CreateRotating() : Idle;
-        Effect? glow = on ? CreateGlow() : null;
+        int key = accent.A == 0 ? -1 : (accent.R << 16) | (accent.G << 8) | accent.B;
+        if (BrushCache.TryGetValue(key, out var b)) return b;
+        b = CreateRotating(accent);
+        BrushCache[key] = b;
+        return b;
+    }
+
+    // Any of the three properties changing re-applies, so the result is correct regardless of attribute order.
+    private static void OnChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        bool on = GetEnabled(d);
+        Brush background = on ? RotatingFor(GetAccent(d)) : Idle;
+        Effect? glow = on && GetGlow(d) ? CreateGlow() : null;
 
         // The target is a Border (a Decorator, NOT a Control), so we can't assume Control here.
         switch (d)
@@ -44,7 +76,7 @@ public static class GradientBorder
         }
     }
 
-    private static Brush CreateRotating()
+    private static Brush CreateRotating(Color accent)
     {
         var brush = new LinearGradientBrush
         {
@@ -53,16 +85,35 @@ public static class GradientBorder
             SpreadMethod = GradientSpreadMethod.Reflect,
             MappingMode = BrushMappingMode.RelativeToBoundingBox,
         };
-        // Two bright sparks racing through the brand gradient read as a current arcing around the edge.
-        brush.GradientStops.Add(new GradientStop(C1, 0.00));
-        brush.GradientStops.Add(new GradientStop(C2, 0.18));
-        brush.GradientStops.Add(new GradientStop(Spark, 0.27));
-        brush.GradientStops.Add(new GradientStop(C2, 0.36));
-        brush.GradientStops.Add(new GradientStop(C3, 0.50));
-        brush.GradientStops.Add(new GradientStop(C2, 0.64));
-        brush.GradientStops.Add(new GradientStop(Spark, 0.73));
-        brush.GradientStops.Add(new GradientStop(C2, 0.82));
-        brush.GradientStops.Add(new GradientStop(C1, 1.00));
+        if (accent.A == 0)
+        {
+            // Brand gradient: two bright sparks racing through it read as a current arcing around the edge.
+            brush.GradientStops.Add(new GradientStop(C1, 0.00));
+            brush.GradientStops.Add(new GradientStop(C2, 0.18));
+            brush.GradientStops.Add(new GradientStop(Spark, 0.27));
+            brush.GradientStops.Add(new GradientStop(C2, 0.36));
+            brush.GradientStops.Add(new GradientStop(C3, 0.50));
+            brush.GradientStops.Add(new GradientStop(C2, 0.64));
+            brush.GradientStops.Add(new GradientStop(Spark, 0.73));
+            brush.GradientStops.Add(new GradientStop(C2, 0.82));
+            brush.GradientStops.Add(new GradientStop(C1, 1.00));
+        }
+        else
+        {
+            // Single-accent variant: dark→accent→bright spark→accent→dark, so the edge reads as the accent
+            // colour (e.g. the severity) while still arcing.
+            Color dark = Mix(accent, Colors.Black, 0.45);
+            Color spark = Mix(accent, Colors.White, 0.7);
+            brush.GradientStops.Add(new GradientStop(dark, 0.00));
+            brush.GradientStops.Add(new GradientStop(accent, 0.20));
+            brush.GradientStops.Add(new GradientStop(spark, 0.30));
+            brush.GradientStops.Add(new GradientStop(accent, 0.42));
+            brush.GradientStops.Add(new GradientStop(dark, 0.55));
+            brush.GradientStops.Add(new GradientStop(accent, 0.70));
+            brush.GradientStops.Add(new GradientStop(spark, 0.80));
+            brush.GradientStops.Add(new GradientStop(accent, 0.90));
+            brush.GradientStops.Add(new GradientStop(dark, 1.00));
+        }
 
         var rotate = new RotateTransform(0, 0.5, 0.5);
         brush.RelativeTransform = rotate;
@@ -70,6 +121,9 @@ public static class GradientBorder
             new Duration(TimeSpan.FromSeconds(2.0))) { RepeatBehavior = RepeatBehavior.Forever });
         return brush;
     }
+
+    private static Color Mix(Color a, Color b, double t) => Color.FromRgb(
+        (byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
 
     private static Effect CreateGlow()
     {

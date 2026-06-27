@@ -33,6 +33,19 @@ public sealed partial class ValidationViewModel : ObservableObject
 
     public ObservableCollection<ValidationIssue> Issues { get; } = new();
 
+    /// <summary>One source/category filter chip ("All", "Items", "Client Items", "Client Mobs", …) with its
+    /// issue count. <see cref="Key"/> is the category key (an issue's <c>Category ?? DbId</c>); null = "All".</summary>
+    public sealed record SourceChip(string? Key, string Label, int Count);
+
+    /// <summary>The source chips shown above the list — categories the user clicks to filter by, instead of
+    /// inline collapsible groups (which defeated list virtualization and felt clunky).</summary>
+    public ObservableCollection<SourceChip> Sources { get; } = new();
+
+    [ObservableProperty]
+    private SourceChip? _selectedSource;
+
+    partial void OnSelectedSourceChanged(SourceChip? value) => ApplyFilter();
+
     /// <summary>Set by the shell so "Go to" / double-click jumps to the offending record (dbId, key).</summary>
     public Action<string, string>? Navigate { get; set; }
 
@@ -85,13 +98,15 @@ public sealed partial class ValidationViewModel : ObservableObject
                 Summary = "Validating…";
                 var scope = FullScan ? ValidationScope.FullScan : ValidationScope.CustomOnly;
                 var report = await Task.Run(() => _validator.Validate(scope));
+                // Group by source (the list is grouped by DbId in the view); within each source, errors first.
                 _all = report.Issues
-                    .OrderByDescending(i => i.Severity)
-                    .ThenBy(i => i.DbId, StringComparer.Ordinal)
+                    .OrderBy(i => i.DbId, StringComparer.Ordinal)
+                    .ThenByDescending(i => i.Severity)
                     .ToList();
                 ErrorCount = report.ErrorCount;
                 WarningCount = report.WarningCount;
                 InfoCount = report.InfoCount;
+                RebuildSources();
                 ApplyFilter();
                 _hasRun = true;
             }
@@ -132,9 +147,11 @@ public sealed partial class ValidationViewModel : ObservableObject
 
     private void ApplyFilter()
     {
+        string? cat = SelectedSource?.Key; // null chip = all sources
         Issues.Clear();
         foreach (var issue in _all)
         {
+            if (cat is not null && !string.Equals(issue.Category ?? issue.DbId, cat, StringComparison.Ordinal)) continue;
             bool show = issue.Severity switch
             {
                 ValidationSeverity.Error => ShowErrors,
@@ -147,6 +164,22 @@ public sealed partial class ValidationViewModel : ObservableObject
         Summary = _all.Count == 0
             ? "No issues found in your custom/overridden entries."
             : $"{ErrorCount} error(s), {WarningCount} warning(s), {InfoCount} info — showing {Issues.Count}.";
+    }
+
+    /// <summary>Rebuilds the source filter chips from the latest results (All + one per source, with counts),
+    /// keeping the current source selected when it's still present, else resetting to All.</summary>
+    private void RebuildSources()
+    {
+        string? keep = SelectedSource?.Key;
+        Sources.Clear();
+        Sources.Add(new SourceChip(null, "All", _all.Count));
+        foreach (var g in _all.GroupBy(i => i.Category ?? i.DbId).OrderBy(g => g.Key, StringComparer.Ordinal))
+        {
+            string label = g.First().Category ?? Common.DbIdToSourceLabelConverter.Label(g.Key);
+            Sources.Add(new SourceChip(g.Key, label, g.Count()));
+        }
+
+        SelectedSource = Sources.FirstOrDefault(s => s.Key == keep) ?? Sources[0];
     }
 
     [RelayCommand]
@@ -182,5 +215,36 @@ public sealed partial class ValidationViewModel : ObservableObject
     private void Open(ValidationIssue? issue)
     {
         if (issue is not null) Navigate?.Invoke(issue.DbId, issue.Key);
+    }
+
+    // ----- right-click clipboard actions -----
+
+    [RelayCommand]
+    private void CopyMessage(ValidationIssue? issue) => Copy(issue?.Message);
+
+    /// <summary>Copies everything about the issue — severity, location, rule id, and message — as one block.</summary>
+    [RelayCommand]
+    private void CopyDetails(ValidationIssue? issue)
+    {
+        if (issue is null) return;
+        Copy($"[{issue.Severity}] {issue.DbId} · {issue.Key}{Field(issue)}\n" +
+             $"Rule: {issue.RuleId ?? "—"}\n{issue.Message}");
+    }
+
+    [RelayCommand]
+    private void CopyLocation(ValidationIssue? issue)
+    {
+        if (issue is not null) Copy($"{issue.DbId}#{issue.Key}{Field(issue)}");
+    }
+
+    [RelayCommand]
+    private void CopyRuleId(ValidationIssue? issue) => Copy(issue?.RuleId);
+
+    private static string Field(ValidationIssue i) => string.IsNullOrEmpty(i.Field) ? string.Empty : $".{i.Field}";
+
+    private static void Copy(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        try { System.Windows.Clipboard.SetText(text); } catch { /* clipboard busy/locked */ }
     }
 }

@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
 using MidgardStudio.Core.Model;
+using MidgardStudio.Core.Validation;
 
 namespace MidgardStudio.App.Common;
 
@@ -34,6 +35,41 @@ public sealed class OriginToLabelConverter : IValueConverter
         throw new NotSupportedException();
 }
 
+/// <summary>A validation issue -> its display category (the Database column): the explicit Category when set,
+/// else the friendly label of its DbId. Bind the whole issue: <c>{Binding Converter={StaticResource ...}}</c>.</summary>
+public sealed class IssueCategoryConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is ValidationIssue i ? i.Category ?? DbIdToSourceLabelConverter.Label(i.DbId) : string.Empty;
+
+    public object ConvertBack(object value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>A validation issue -> the file the user edits to fix it (the Filename column).</summary>
+public sealed class IssueFileConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is not ValidationIssue i) return string.Empty;
+        return i.DbId switch
+        {
+            "client_items" => "itemInfo_C.lua",
+            "client_skills" => i.Field switch
+            {
+                "Description" => "skilldescript.lub",
+                "SKID" => "skillid.lub",
+                _ => "skillinfolist.lub",
+            },
+            "mob_db" when i.Category == "Client Mobs" => "npcidentity.lub",
+            _ => i.DbId + ".yml", // server db import file
+        };
+    }
+
+    public object ConvertBack(object value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
 /// <summary>A count (int) > 0 -> Visible, else Collapsed (for optional metadata sections).</summary>
 public sealed class CountToVisibilityConverter : IValueConverter
 {
@@ -59,6 +95,37 @@ public sealed class FileNameConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object? parameter, CultureInfo culture) =>
         value is string s ? System.IO.Path.GetFileName(s) : value;
+
+    public object ConvertBack(object value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>Maps a validation issue's db id to a friendly source label for the grouped panel headers
+/// ("item_db" -> "Items", "client_skills" -> "Client Skills"); unknown ids are humanized as a fallback.</summary>
+public sealed class DbIdToSourceLabelConverter : IValueConverter
+{
+    private static readonly Dictionary<string, string> Map = new(StringComparer.Ordinal)
+    {
+        ["item_db"] = "Items",
+        ["mob_db"] = "Monsters",
+        ["skill_db"] = "Skills",
+        ["client_skills"] = "Client Skills",
+        ["client_items"] = "Client Items",
+        ["item_combo_db"] = "Item Combos",
+        ["mob_skill_db"] = "Mob Skills",
+    };
+
+    public object Convert(object value, Type targetType, object? parameter, CultureInfo culture) =>
+        Label(value as string);
+
+    /// <summary>The friendly source label for a db id (shared by the XAML group/chip and the view model).</summary>
+    public static string Label(string? id)
+    {
+        if (string.IsNullOrEmpty(id)) return "Other";
+        if (Map.TryGetValue(id, out var label)) return label;
+        var words = id.Replace("_db", string.Empty).Split('_', StringSplitOptions.RemoveEmptyEntries);
+        return string.Join(' ', words.Select(w => char.ToUpperInvariant(w[0]) + w[1..]));
+    }
 
     public object ConvertBack(object value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();

@@ -42,6 +42,11 @@ public sealed record ValidationIssue(
 
     /// <summary>An optional one-click remedy.</summary>
     public QuickFix? Fix { get; init; }
+
+    /// <summary>Overrides the display category when the finding's <see cref="DbId"/> (which drives navigation)
+    /// doesn't match how it should be grouped — e.g. a client mob-sprite check has DbId "mob_db" (so "Go to"
+    /// opens the Monsters list) but belongs under the "Client Mobs" category. Null = group by DbId.</summary>
+    public string? Category { get; init; }
 }
 
 /// <summary>Validates a single record (the common case — enum, bounds, references, …). Cheap enough
