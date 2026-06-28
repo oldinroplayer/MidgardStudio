@@ -17,14 +17,17 @@
                            Text="A snapshot of your server + client data is taken after each manual save; unchanged files are de-duplicated to save space. Restore, pin, verify, or export any point in time below." />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-                <ui:Button Content="Create backup now" Appearance="Primary" Command="{Binding CreateNowCommand}" Margin="0,0,8,0">
+                <ui:Button Content="Create backup now" Appearance="Primary" Command="{Binding CreateNowCommand}" Margin="0,0,8,0"
+                           ToolTip="Take a snapshot of the current server + client data right now.">
                     <ui:Button.Icon><ui:SymbolIcon Symbol="Save24" /></ui:Button.Icon>
                 </ui:Button>
-                <ui:Button Content="Import…" Command="{Binding ImportCommand}" Margin="0,0,8,0" />
-                <ui:Button Content="Open folder" Command="{Binding OpenFolderCommand}" Margin="0,0,8,0">
+                <ui:Button Content="Import…" Command="{Binding ImportCommand}" Margin="0,0,8,0"
+                           ToolTip="Import a backup from a .zip exported on this or another machine." />
+                <ui:Button Content="Open folder" Command="{Binding OpenFolderCommand}" Margin="0,0,8,0"
+                           ToolTip="Open the backups folder on disk.">
                     <ui:Button.Icon><ui:SymbolIcon Symbol="Folder24" /></ui:Button.Icon>
                 </ui:Button>
-                <ui:Button Content="Refresh" Command="{Binding RefreshCommand}" />
+                <ui:Button Content="Refresh" Command="{Binding RefreshCommand}" ToolTip="Reload the list of backups." />
             </StackPanel>
         </Grid>
 
@@ -61,8 +64,19 @@
                             <GridViewColumn Header="" Width="26">
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
-                                        <ui:SymbolIcon Symbol="Pin28" FontSize="14" Foreground="#9A5FF4" ToolTip="Pinned — kept regardless of retention"
-                                                       Visibility="{Binding Pinned, Converter={StaticResource BoolToVis}}" />
+                                        <ui:SymbolIcon Symbol="Pin28" FontSize="16" ToolTip="Pinned — kept regardless of retention"
+                                                       Visibility="{Binding Pinned, Converter={StaticResource BoolToVis}}">
+                                            <ui:SymbolIcon.Style>
+                                                <Style TargetType="{x:Type ui:SymbolIcon}">
+                                                    <Setter Property="Foreground" Value="#C9A6FF" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True">
+                                                            <Setter Property="Foreground" Value="White" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ui:SymbolIcon.Style>
+                                        </ui:SymbolIcon>
                                     </DataTemplate>
                                 </GridViewColumn.CellTemplate>
                             </GridViewColumn>
@@ -93,7 +107,8 @@
                             <Border Background="#1FFFFFFF" CornerRadius="3" Padding="8,3" Margin="0,0,8,0">
                                 <TextBlock Text="{Binding SizeText}" FontSize="11.5" />
                             </Border>
-                            <Border Background="#1F7F6FD4" CornerRadius="3" Padding="8,3">
+                            <Border Background="#1F7F6FD4" CornerRadius="3" Padding="8,3"
+                                    Visibility="{Binding DataContext.EncodingChip, Converter={StaticResource StringToVis}, RelativeSource={RelativeSource AncestorType=UserControl}}">
                                 <TextBlock FontSize="11.5"
                                            Text="{Binding DataContext.EncodingChip, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                             </Border>
@@ -106,25 +121,31 @@
                     <!-- Actions pinned to the bottom -->
                     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
                         <ui:Button Content="Restore this backup" Appearance="Primary" Margin="0,0,8,0"
+                                   ToolTip="Replace your current data with this snapshot. A safety backup is taken first."
                                    Command="{Binding DataContext.RestoreCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                    CommandParameter="{Binding}">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowUndo24" /></ui:Button.Icon>
                         </ui:Button>
                         <ui:Button Content="{Binding DataContext.PinButtonText, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,0,8,0"
+                                   ToolTip="Pin keeps this backup regardless of retention; unpin lets it age out normally."
                                    Command="{Binding DataContext.TogglePinCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                    CommandParameter="{Binding}" />
                         <ui:Button Content="Verify" Margin="0,0,8,0"
+                                   ToolTip="Re-check this backup's files against their stored checksums."
                                    Command="{Binding DataContext.VerifyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                    CommandParameter="{Binding}" />
                         <ui:Button Content="Export…" Margin="0,0,8,0"
+                                   ToolTip="Save this backup as a .zip you can copy to another machine."
                                    Command="{Binding DataContext.ExportCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                    CommandParameter="{Binding}" />
                         <ui:Button Content="Open" Margin="0,0,8,0"
+                                   ToolTip="Open this backup's folder on disk."
                                    Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                    CommandParameter="{Binding}">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Folder24" /></ui:Button.Icon>
                         </ui:Button>
                         <ui:Button Content="Delete"
+                                   ToolTip="Delete this backup permanently."
                                    Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                    CommandParameter="{Binding}">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" /></ui:Button.Icon>

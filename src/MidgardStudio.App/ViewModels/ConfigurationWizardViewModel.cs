@@ -51,16 +51,8 @@ public sealed partial class ConfigurationWizardViewModel : ObservableObject
 
     /// <summary>Display Encoding choices (codepage + friendly label). Drives how the app decodes text for
     /// viewing and how it reads/writes the loose client lua files; server YAML is always saved as UTF-8.</summary>
-    public IReadOnlyList<EncodingOption> EncodingOptions { get; } = new[]
-    {
-        new EncodingOption("Western — Windows-1252 (Latin)", 1252),
-        new EncodingOption("Korean — EUC-KR (949)", 949),
-        new EncodingOption("Cyrillic — Windows-1251", 1251),
-        new EncodingOption("Japanese — Shift-JIS (932)", 932),
-        new EncodingOption("Simplified Chinese — GBK (936)", 936),
-        new EncodingOption("Thai — Windows-874", 874),
-        new EncodingOption("Traditional Chinese — Big5 (950)", 950),
-    };
+    public IReadOnlyList<EncodingOption> EncodingOptions { get; } =
+        Common.EncodingCatalog.Choices.Select(c => new EncodingOption(c.Label, c.Codepage)).ToList();
 
     /// <summary>Reloads the profile list and the editable fields (active profile, or repo defaults).</summary>
     public void Refresh()

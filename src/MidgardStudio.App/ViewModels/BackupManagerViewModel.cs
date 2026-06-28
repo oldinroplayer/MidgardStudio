@@ -49,10 +49,24 @@ public sealed partial class BackupManagerViewModel : ObservableObject
 
     public string PinButtonText => Selected?.Pinned == true ? "Unpin" : "Pin";
 
-    public string? EncodingChip => Selected is null
-        ? null
-        : "Encoding " + BackupService.EncodingLabel(Selected.Manifest.EncodingCodepage)
-          + (string.IsNullOrEmpty(Selected.Manifest.Ruleset) ? string.Empty : "  ·  " + Selected.Manifest.Ruleset);
+    public string? EncodingChip
+    {
+        get
+        {
+            if (Selected is null) return null;
+            string ruleset = RulesetLabel(Selected.Manifest.Ruleset);
+            string enc = Selected.Manifest.EncodingCodepage > 0 ? BackupService.EncodingLabel(Selected.Manifest.EncodingCodepage) : string.Empty;
+            return string.Join("  ·  ", new[] { ruleset, enc }.Where(s => !string.IsNullOrEmpty(s)));
+        }
+    }
+
+    /// <summary>Friendly ruleset label for the chip (the manifest stores the ServerMode enum name).</summary>
+    private static string RulesetLabel(string ruleset) => ruleset switch
+    {
+        "PreRenewal" => "Pre-Renewal",
+        "Renewal" => "Renewal",
+        _ => ruleset, // empty/unknown -> as-is
+    };
 
     partial void OnSelectedChanged(BackupEntry? value)
     {

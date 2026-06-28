@@ -232,7 +232,7 @@ public sealed class BackupService
         try
         {
             File.WriteAllText(manifestTmp, JsonSerializer.Serialize(manifest, JsonOptions));
-            File.Move(manifestTmp, manifestPath);
+            File.Move(manifestTmp, manifestPath, overwrite: true); // overwrite: SetPinned rewrites an existing manifest
             return true;
         }
         catch
@@ -269,7 +269,7 @@ public sealed class BackupService
 
     public int CurrentCodepage => _session.ClientCodepage;
 
-    public static string EncodingLabel(int codepage) => codepage <= 0 ? "unknown" : "CP" + codepage;
+    public static string EncodingLabel(int codepage) => Common.EncodingCatalog.Label(codepage);
 
     // ---- slice 5: integrity + what-changed ----
 
