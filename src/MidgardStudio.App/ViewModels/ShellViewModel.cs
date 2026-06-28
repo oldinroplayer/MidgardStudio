@@ -624,9 +624,8 @@ public partial class ShellViewModel : ObservableObject
         if (!settings.ValidateOnSave || settings.SaveGate == ValidationGateMode.Advisory)
             return true;
 
-        var dbIds = saveTargets.Select(t => t.Id).ToList();
-        if (clientDirty && !dbIds.Contains("item_db")) dbIds.Add("item_db");
-        if (clientSkillDirty && !dbIds.Contains("skill_db")) dbIds.Add("skill_db"); // pulls in the client-skill cross-check
+        var dbIds = MidgardStudio.Core.Validation.SaveGate.TargetsToValidate(
+            saveTargets.Select(t => t.Id), clientDirty, clientSkillDirty);
         if (dbIds.Count == 0) return true;
 
         MidgardStudio.Core.Validation.ValidationReport report;
@@ -635,7 +634,7 @@ public partial class ShellViewModel : ObservableObject
 
         if (!report.HasErrors) return true;
 
-        string message = BuildGateMessage(report);
+        string message = MidgardStudio.Core.Validation.SaveGate.FormatErrors(report);
         if (settings.SaveGate == ValidationGateMode.HardGate)
         {
             Views.ConfirmDialog.Alert("Validation errors",
@@ -644,20 +643,6 @@ public partial class ShellViewModel : ObservableObject
         }
 
         return Views.ConfirmDialog.Show("Validation errors", message, yes: "Save anyway", no: "Fix first");
-    }
-
-    private static string BuildGateMessage(MidgardStudio.Core.Validation.ValidationReport report)
-    {
-        var errors = report.Issues
-            .Where(i => i.Severity == MidgardStudio.Core.Validation.ValidationSeverity.Error)
-            .ToList();
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"{errors.Count} error(s) were found in the entries you're about to save:");
-        sb.AppendLine();
-        foreach (var e in errors.Take(10))
-            sb.AppendLine($"•  [{e.DbId} #{e.Key}]  {e.Message}");
-        if (errors.Count > 10) sb.AppendLine($"…and {errors.Count - 10} more.");
-        return sb.ToString();
     }
 
     [RelayCommand]
