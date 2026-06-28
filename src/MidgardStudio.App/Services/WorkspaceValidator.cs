@@ -96,74 +96,10 @@ public sealed class WorkspaceValidator
     {
         if (_schemas.Get("item_db") is not { } schema) return;
         var overlay = _session.GetActiveOverlay(schema);
-
-        // Parse the accessory view map ONCE for the whole pass (HasView re-read + re-parsed the lua per item).
-        var mappedViews = _sprite.IsAvailable ? _sprite.MappedViewIds() : new HashSet<int>();
-
-        foreach (var rec in overlay.Effective())
-        {
-            if (scope == ValidationScope.CustomOnly && rec.Origin == RecordOrigin.Base) continue;
-            int id = rec.GetInt("Id");
-            string key = id.ToString();
-
-            if (!_client.Exists(id))
-            {
-                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "client_items", key, "client",
-                    "Item doesn't exist in Client Items (itemInfo.lua / itemInfo_C.lua) — it will show no name or description in-game.")
-                {
-                    RuleId = "XFILE.ITEM_NO_CLIENTTEXT",
-                    Fix = new QuickFix("Create client text", () => CreateClientText(rec), () => _client.Remove(id)),
-                });
-                continue;
-            }
-
-            var entry = _client.GetOrCreate(id);
-
-            int slots = rec.GetInt("Slots");
-            if (entry.SlotCount != slots)
-            {
-                int oldSlots = entry.SlotCount;
-                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "client_items", key, "SlotCount",
-                    $"Slots count mismatch — Server [{slots}], Client [{entry.SlotCount}].")
-                {
-                    RuleId = "XFILE.SLOTCOUNT_MISMATCH",
-                    Fix = new QuickFix($"Set client slots to {slots}", () => SetClientSlot(id, slots), () => SetClientSlot(id, oldSlots)),
-                });
-            }
-
-            var loc = rec.GetSet("Locations");
-            bool isHeadgear = loc is not null
-                && (loc.Contains("Head_Top") || loc.Contains("Head_Mid") || loc.Contains("Head_Low")
-                    || loc.Contains("Costume_Head_Top") || loc.Contains("Costume_Head_Mid") || loc.Contains("Costume_Head_Low"));
-            bool isGarment = loc is not null && (loc.Contains("Garment") || loc.Contains("Costume_Garment"));
-
-            // Server View only drives the broadcast worn sprite for headgear/costume-head and garment, where it
-            // must equal the client ClassNum. For weapons (sprite comes from SubType), accessories, cards and
-            // generic items the two are independent — so don't flag a mismatch there.
-            int view = rec.GetInt("View");
-            if ((isHeadgear || isGarment) && entry.ClassNum != view)
-            {
-                int oldView = entry.ClassNum;
-                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "client_items", key, "ClassNum",
-                    $"View / ClassNum mismatch — Server View [{view}], Client ClassNum [{entry.ClassNum}]. " +
-                    "For headgear and garments these must match or the equipped sprite won't appear.")
-                {
-                    RuleId = "XFILE.CLASSNUM_MISMATCH",
-                    Fix = new QuickFix($"Set client ClassNum to {view}", () => SetClientClassNum(id, view), () => SetClientClassNum(id, oldView)),
-                });
-            }
-
-            if (_grf.IsConfigured && !string.IsNullOrEmpty(entry.IdentifiedResourceName)
-                && !_grf.Exists(GrfAssetPaths.ItemIcon(entry.IdentifiedResourceName)))
-                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "client_items", key, "icon",
-                    $"Inventory icon '{entry.IdentifiedResourceName}.bmp' not found in the configured GRF.")
-                { RuleId = "XFILE.ICON_MISSING" });
-
-            if (isHeadgear && view > 0 && _sprite.IsAvailable && !mappedViews.Contains(view))
-                issues.Add(new ValidationIssue(ValidationSeverity.Warning, "client_items", key, "View",
-                    $"Headgear View {view} is not mapped in accessoryid.lub / accname.lub — the sprite won't show.")
-                { RuleId = "XFILE.HEADGEAR_NO_ACCMAP" });
-        }
+        // The rules + their quick-fixes live in Core (ItemClientFileValidator), reached through ports — the
+        // live client/GRF/sprite services are wrapped by the adapters below.
+        issues.AddRange(ItemClientFileValidator.Validate(overlay.Effective(), scope,
+            new ClientItemProbe(_client), new GrfIconProbe(_grf), new AccessoryMapProbe(_sprite), new ClientItemEditor(_client)));
     }
 
     private void ValidateMobClientFiles(List<ValidationIssue> issues, ValidationScope scope)
@@ -263,33 +199,47 @@ public sealed class WorkspaceValidator
         }
     }
 
-    // ---- quick-fix helpers (UI thread) ----
+    // ---- Core port adapters: the only place the item cross-file rules touch live client/GRF/sprite services ----
 
-    private void CreateClientText(DbRecord rec)
+    private sealed class ClientItemProbe(ClientItemService client) : IClientItemProbe
     {
-        int id = rec.GetInt("Id");
-        var entry = _client.GetOrCreate(id);
-        string? name = rec.GetString("Name");
-        if (string.IsNullOrWhiteSpace(name)) name = rec.GetString("AegisName") ?? $"Item {id}";
-        entry.IdentifiedDisplayName = name;
-        entry.UnidentifiedDisplayName = name;
-        entry.SlotCount = rec.GetInt("Slots");
-        entry.ClassNum = rec.GetInt("View");
-        if (entry.IdentifiedDescription.Count == 0) entry.IdentifiedDescription.Add(name);
-        _client.Upsert(entry);
+        public bool Exists(int id) => client.Exists(id);
+        public ClientItemFacts? Get(int id)
+        {
+            if (!client.Exists(id)) return null;
+            var e = client.GetOrCreate(id);
+            return new ClientItemFacts(e.SlotCount, e.ClassNum, e.IdentifiedResourceName);
+        }
     }
 
-    private void SetClientSlot(int id, int slots)
+    private sealed class GrfIconProbe(GrfService grf) : IGrfIconProbe
     {
-        var entry = _client.GetOrCreate(id);
-        entry.SlotCount = slots;
-        _client.Upsert(entry);
+        public bool IsConfigured => grf.IsConfigured;
+        public bool IconExists(string resourceName) => grf.Exists(GrfAssetPaths.ItemIcon(resourceName));
     }
 
-    private void SetClientClassNum(int id, int view)
+    private sealed class AccessoryMapProbe(SpriteLinkService sprite) : IAccessoryMapProbe
     {
-        var entry = _client.GetOrCreate(id);
-        entry.ClassNum = view;
-        _client.Upsert(entry);
+        public bool IsAvailable => sprite.IsAvailable;
+        public IReadOnlySet<int> MappedViewIds() => sprite.MappedViewIds();
+    }
+
+    private sealed class ClientItemEditor(ClientItemService client) : IClientItemEditor
+    {
+        public void SetSlots(int id, int slots) { var e = client.GetOrCreate(id); e.SlotCount = slots; client.Upsert(e); }
+        public void SetClassNum(int id, int classNum) { var e = client.GetOrCreate(id); e.ClassNum = classNum; client.Upsert(e); }
+
+        public void CreateText(int id, string name, int slots, int classNum)
+        {
+            var e = client.GetOrCreate(id);
+            e.IdentifiedDisplayName = name;
+            e.UnidentifiedDisplayName = name;
+            e.SlotCount = slots;
+            e.ClassNum = classNum;
+            if (e.IdentifiedDescription.Count == 0) e.IdentifiedDescription.Add(name);
+            client.Upsert(e);
+        }
+
+        public void Remove(int id) => client.Remove(id);
     }
 }
