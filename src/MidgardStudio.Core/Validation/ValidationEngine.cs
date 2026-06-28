@@ -28,6 +28,7 @@ public sealed class ValidationEngine
             new SchemaDrivenValidator(),
             new ItemDbValidator(),
             new MobDbValidator(),
+            new MobAvailValidator(),
             new ItemComboValidator(),
             new ScriptSanityValidator(),
         },

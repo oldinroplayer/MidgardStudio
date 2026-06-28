@@ -295,8 +295,12 @@
             </Grid.ColumnDefinitions>
             <TextBlock Text="{Binding Label}" Style="{StaticResource FieldLabel}" />
             <Border Grid.Column="1" Style="{StaticResource FieldBox}">
+                <!-- Text binds to the live Query (PropertyChanged) so the dropdown filters in real time; the
+                     field value commits once on blur via CommitOnLostFocus (no per-keystroke undo spam). -->
                 <ComboBox ItemsSource="{Binding Suggestions}"
-                          Text="{Binding Value, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding IsEditable}"
+                          Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}"
+                          common:FieldBehaviors.CommitOnLostFocus="{Binding CommitCommand}"
+                          IsEnabled="{Binding IsEditable}"
                           Style="{StaticResource FieldComboBox}" />
             </Border>
         </Grid>

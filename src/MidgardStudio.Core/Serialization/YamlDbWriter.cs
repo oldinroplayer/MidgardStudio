@@ -56,7 +56,17 @@ public sealed class YamlDbWriter
 
     public void WriteFile(string path, DbSchema schema, DbFile file)
     {
-        var text = WriteToString(schema, file);
+        var canonical = WriteToString(schema, file);
+        // Preserve a hand-documented import file's comments (banner, field docs, commented-out examples) by
+        // merging the regenerated Body into the existing text rather than overwriting it wholesale. No-op for
+        // app-generated files (no banner, real Body) and for a first write (no existing file). See YamlBodyMerge.
+        string? existing = null;
+        if (File.Exists(path))
+        {
+            try { existing = File.ReadAllText(path, new UTF8Encoding(false)); }
+            catch { existing = null; } // unreadable -> fall back to a clean regenerate
+        }
+        var text = YamlBodyMerge.Merge(existing, canonical);
         var bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(text); // rAthena YAML is UTF-8, no BOM
         var dir = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(dir);

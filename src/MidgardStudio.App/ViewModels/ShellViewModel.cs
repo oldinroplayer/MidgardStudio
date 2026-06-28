@@ -26,6 +26,7 @@ public partial class ShellViewModel : ObservableObject
     private readonly WorkspaceSession _session;
     private readonly SchemaRegistry _schemas;
     private readonly ReferenceResolver _references;
+    private readonly ReferenceIndex _referenceIndex;
     private readonly GrfBrowserViewModel _grfBrowser;
     private readonly ValidationViewModel _validation;
     private readonly WorkspaceValidator _validator;
@@ -122,7 +123,7 @@ public partial class ShellViewModel : ObservableObject
     private readonly CompositeDirtyState _dirty;
 
     public ShellViewModel(IWorkspaceConfigService config, SchemaRegistry schemas, WorkspaceSession session,
-        ReferenceResolver references, GrfBrowserViewModel grfBrowser, ClientItemService clientItems,
+        ReferenceResolver references, ReferenceIndex referenceIndex, GrfBrowserViewModel grfBrowser, ClientItemService clientItems,
         ClientSkillService clientSkills,
         GrfImageService images, SpriteLinkService sprite, MobSpriteService mobSprite, ValidationViewModel validation,
         WorkspaceValidator validator,
@@ -134,6 +135,7 @@ public partial class ShellViewModel : ObservableObject
         _schemas = schemas;
         _session = session;
         _references = references;
+        _referenceIndex = referenceIndex;
         _grfBrowser = grfBrowser;
         _validation = validation;
         _validator = validator;
@@ -389,7 +391,7 @@ public partial class ShellViewModel : ObservableObject
             if (!_workspaces.TryGetValue(id, out var workspace))
             {
                 workspace = new DbWorkspaceViewModel(_session, schema, _references, _clientItems, _images,
-                    _mobSprite, _drops, NavigateTo, _clientSkills);
+                    _mobSprite, _drops, NavigateTo, _clientSkills, _referenceIndex);
                 _workspaces[id] = workspace;
             }
 
@@ -842,7 +844,7 @@ public partial class ShellViewModel : ObservableObject
             if (!_workspaces.TryGetValue(id, out var workspace))
             {
                 workspace = new DbWorkspaceViewModel(_session, schema, _references, _clientItems, _images,
-                    _mobSprite, _drops, NavigateTo, _clientSkills);
+                    _mobSprite, _drops, NavigateTo, _clientSkills, _referenceIndex);
                 _workspaces[id] = workspace;
             }
             // One malformed database must not stop the rest from being indexed for search.

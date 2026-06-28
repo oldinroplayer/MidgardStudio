@@ -1,3 +1,4 @@
+using MidgardStudio.Core.Lookup;
 using MidgardStudio.Core.Model;
 using MidgardStudio.Core.Validation;
 
@@ -83,6 +84,11 @@ public sealed class FieldSchema
 
     /// <summary>Optional conditional visibility (e.g. WeaponLevel only for Type == Weapon).</summary>
     public Func<DbRecord, bool>? IsApplicable { get; init; }
+
+    /// <summary>Conditional visibility that needs cross-database knowledge (e.g. mob_avail PetEquip only when
+    /// the Mob is a pet). Evaluated with the reference index when available; takes precedence over
+    /// <see cref="IsApplicable"/>. Defaults to applicable when no index is supplied.</summary>
+    public Func<DbRecord, IReferenceIndex, bool>? IsApplicableRefs { get; init; }
 
     /// <summary>When true, the generic detail form skips this field — it is presented by a dedicated
     /// card instead (e.g. mob Drops/MvpDrops shown as drop tables). Still serialized normally.</summary>

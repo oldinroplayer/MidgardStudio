@@ -1,5 +1,6 @@
 using MidgardStudio.Core.Lookup;
 using MidgardStudio.Core.Schema;
+using MidgardStudio.Core.Schemas;
 
 namespace MidgardStudio.App.Services;
 
@@ -32,7 +33,7 @@ public sealed class ReferenceIndex : IReferenceIndex
         lock (_lock) _cache.Clear();
     }
 
-    public bool Knows(string dbId) => _schemas.Has(dbId);
+    public bool Knows(string dbId) => dbId == MobAvailConstants.SpriteRefDb || _schemas.Has(dbId);
 
     public bool Contains(string dbId, string referenceValue)
     {
@@ -45,6 +46,28 @@ public sealed class ReferenceIndex : IReferenceIndex
         lock (_lock)
         {
             if (_cache.TryGetValue(dbId, out var cached)) return cached;
+
+            // The synthetic mob_avail "Sprite" source: a value is "known" if it's a mob AegisName or a player
+            // job constant (NPC sprite constants stay unknown -> a soft warning, which is acceptable).
+            if (dbId == MobAvailConstants.SpriteRefDb)
+            {
+                var sprites = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (_schemas.Get("mob_db") is { } mobSchema)
+                {
+                    try
+                    {
+                        foreach (var rec in _session.GetActiveOverlay(mobSchema).Effective())
+                        {
+                            var n = rec.GetString("AegisName");
+                            if (!string.IsNullOrWhiteSpace(n)) sprites.Add(n);
+                        }
+                    }
+                    catch { /* mob_db not loadable — jobs alone still resolve */ }
+                }
+                foreach (var job in MobAvailConstants.Jobs) sprites.Add(job);
+                _cache[dbId] = sprites;
+                return sprites;
+            }
 
             var schema = _schemas.Get(dbId);
             if (schema is null) return null;

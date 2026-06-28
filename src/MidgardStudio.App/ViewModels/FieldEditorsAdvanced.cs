@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Data;
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MidgardStudio.Core.Commands;
@@ -359,26 +360,47 @@ public sealed partial class ObjectListFieldEditorViewModel : FieldEditorViewMode
 public sealed class ReferenceFieldEditorViewModel : FieldEditorViewModel
 {
     private readonly string _db;
+    private string? _query;
 
     public ReferenceFieldEditorViewModel(DbRecord r, FieldSchema f, FieldEditorContext c) : base(r, f, c)
     {
         _db = f.Enum?.ReferenceDb ?? string.Empty;
+        _query = Record.GetString(FieldName); // start the live text at the committed value
+        CommitCommand = new RelayCommand(CommitQuery);
     }
 
-    public string? Value
+    /// <summary>The live editable text — drives <see cref="Suggestions"/> as the user types, so the dropdown
+    /// filters in real time, WITHOUT pushing an undo command per keystroke. The field value is committed once
+    /// on focus loss (<see cref="CommitCommand"/>) — matching the previous commit timing.</summary>
+    public string? Query
     {
-        get => Record.GetString(FieldName);
+        get => _query;
         set
         {
-            if (value != Value)
+            if (_query != value)
             {
-                Commit(value);
+                _query = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(Suggestions));
             }
         }
     }
 
+    /// <summary>The committed field value (one undo step). Set on focus loss via <see cref="CommitCommand"/>.</summary>
+    public string? Value
+    {
+        get => Record.GetString(FieldName);
+        set { if (value != Value) { Commit(value); OnPropertyChanged(); } }
+    }
+
+    /// <summary>Commits the live query text to the record — bound to the combo's lost-focus.</summary>
+    public ICommand CommitCommand { get; }
+
+    private void CommitQuery()
+    {
+        if ((Query ?? string.Empty) != (Value ?? string.Empty)) Value = Query;
+    }
+
     public IReadOnlyList<string> Suggestions =>
-        Context.References?.Search(_db, Value ?? string.Empty, 40) ?? Array.Empty<string>();
+        Context.References?.Search(_db, Query ?? string.Empty, 40) ?? Array.Empty<string>();
 }

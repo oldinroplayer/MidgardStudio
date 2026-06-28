@@ -27,12 +27,16 @@ public sealed partial class RecordEditorViewModel : ObservableObject
     // consistency). Cross-database reference resolution is deliberately skipped here (empty index) —
     // it would force the reference cache to build mid-keystroke; the full panel scan covers it.
     private readonly InMemoryReferenceIndex _liveRefs = new();
+    // The REAL reference index, used only to evaluate context-aware field applicability (e.g. mob_avail
+    // PetEquip shows only when the Mob is a pet). It lazily builds only the db a predicate actually queries
+    // (e.g. the small pet_db) — unlike live validation, which uses the empty _liveRefs to stay keystroke-cheap.
+    private readonly IReferenceIndex? _applicabilityRefs;
     private RecordKey _key;
 
     public RecordEditorViewModel(OverlayTable table, EditCommandStack stack,
         IReferenceResolver? references = null, ScriptCommandCatalog? catalog = null,
         Core.Workspace.ServerMode mode = Core.Workspace.ServerMode.Renewal,
-        ValidationEngine? validator = null)
+        ValidationEngine? validator = null, IReferenceIndex? applicabilityRefs = null)
     {
         _table = table;
         _stack = stack;
@@ -40,7 +44,14 @@ public sealed partial class RecordEditorViewModel : ObservableObject
         _catalog = catalog;
         _mode = mode;
         _validator = validator;
+        _applicabilityRefs = applicabilityRefs;
     }
+
+    /// <summary>Whether a field shows in the form: a context-aware predicate (with the real reference index)
+    /// takes precedence, else the plain record predicate, else always.</summary>
+    private bool Applies(Core.Schema.FieldSchema f, DbRecord r) =>
+        f.IsApplicableRefs is { } ar ? (_applicabilityRefs is not null ? ar(r, _applicabilityRefs) : true)
+        : (f.IsApplicable?.Invoke(r) ?? true);
 
     public ObservableCollection<FieldGroupViewModel> Groups { get; } = new();
 
@@ -145,7 +156,7 @@ public sealed partial class RecordEditorViewModel : ObservableObject
         foreach (var group in schema.Fields
                      .Where(f => !f.HideInForm)
                      .Where(f => InActiveSystem(f))
-                     .Where(f => f.IsApplicable?.Invoke(record) ?? true)
+                     .Where(f => Applies(f, record))
                      .GroupBy(f => f.Group ?? "General"))
         {
             var fields = new List<FieldEditorViewModel>();
@@ -201,7 +212,7 @@ public sealed partial class RecordEditorViewModel : ObservableObject
     /// field — e.g. setting Type=Weapon reveals SubType / Weapon Level — triggers a rebuild).</summary>
     private string ApplicableSignature(DbRecord record) =>
         string.Join(",", record.Schema.Fields
-            .Where(f => !f.HideInForm && InActiveSystem(f) && (f.IsApplicable?.Invoke(record) ?? true))
+            .Where(f => !f.HideInForm && InActiveSystem(f) && Applies(f, record))
             .Select(f => f.Name));
 
     private void OnFieldChanged()

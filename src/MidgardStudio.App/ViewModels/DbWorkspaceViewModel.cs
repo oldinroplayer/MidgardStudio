@@ -22,6 +22,7 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
     private readonly GrfImageService? _images;
     private readonly MobSpriteService? _mobSprite;
     private readonly DropService? _drops;
+    private readonly IReferenceIndex? _referenceIndex;
     private readonly Action<string, RecordKey>? _navigate;
     private ModeSet? _modeSet;
     private OverlayTable? _overlay;
@@ -29,7 +30,7 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
     public DbWorkspaceViewModel(WorkspaceSession session, DbSchema schema, IReferenceResolver references,
         ClientItemService? clientItems = null, GrfImageService? images = null,
         MobSpriteService? mobSprite = null, DropService? drops = null, Action<string, RecordKey>? navigate = null,
-        ClientSkillService? clientSkills = null)
+        ClientSkillService? clientSkills = null, IReferenceIndex? referenceIndex = null)
     {
         _session = session;
         _schema = schema;
@@ -40,6 +41,7 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
         _mobSprite = mobSprite;
         _drops = drops;
         _navigate = navigate;
+        _referenceIndex = referenceIndex;
     }
 
     /// <summary>True for the Mobs database, which gets the client sprite-registration side editor.</summary>
@@ -132,16 +134,30 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
     {
         if (_overlay is null || List?.SelectedRow is not { } row) return;
         var keyField = _schema.KeyField;
-        if (keyField is null || keyField.Kind != FieldKind.Int) return;
-        if (_overlay.OriginOf(row.Key) != RecordOrigin.NewCustom) { PortReportText = "Change ID only applies to custom entries."; return; }
+        if (keyField is null) return;
+        if (_overlay.OriginOf(row.Key) != RecordOrigin.NewCustom) { PortReportText = "Change only applies to custom entries."; return; }
 
-        int current = (int)row.Key.AsInt;
-        if (PromptId("Change ID", "New ID", current) is not { } newId || newId == current) return;
-        if (_overlay.GetEffective(RecordKey.Of(newId)) is not null) { PortReportText = $"ID {newId} already exists."; return; }
+        // Pick the new key: an int prompt for int keys, a reference picker (e.g. mob_avail's Mob) for reference keys.
+        object newKey;
+        if (keyField.Kind == FieldKind.Int)
+        {
+            int current = (int)row.Key.AsInt;
+            if (PromptId("Change ID", "New ID", current) is not { } newId || newId == current) return;
+            if (_overlay.GetEffective(RecordKey.Of(newId)) is not null) { PortReportText = $"ID {newId} already exists."; return; }
+            newKey = newId;
+        }
+        else if (keyField.Kind == FieldKind.Reference && keyField.Enum?.ReferenceDb is { } refDb)
+        {
+            string current = row.Key.ToString();
+            if (PromptReference($"Change {keyField.Label}", keyField.Label, refDb, current) is not { } chosen || chosen == current) return;
+            if (_overlay.GetEffective(RecordKey.Of(chosen)) is not null) { PortReportText = $"'{chosen}' already has an entry."; return; }
+            newKey = chosen;
+        }
+        else return;
 
         var clone = _overlay.GetEffective(row.Key)!.DeepClone();
-        clone.SetRaw(keyField.Name, newId);
-        using (_session.Commands.BeginBatch("Change ID"))
+        clone.SetRaw(keyField.Name, newKey);
+        using (_session.Commands.BeginBatch("Change " + keyField.Label))
         {
             _session.Commands.Execute(new RemoveImportCommand(_overlay, _overlay.GetEffective(row.Key)!));
             _session.Commands.Execute(new AddRecordCommand(_overlay, clone));
@@ -225,6 +241,16 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
     private static int? PromptId(string title, string prompt, int initial)
     {
         var dlg = new Views.IdInputDialog(title, prompt, initial) { Owner = System.Windows.Application.Current.MainWindow };
+        return dlg.ShowDialog() == true ? dlg.Value : null;
+    }
+
+    /// <summary>Prompts for a reference-db value (e.g. the mob a mob_avail entry disguises) with autocomplete.</summary>
+    private string? PromptReference(string title, string prompt, string referenceDb, string initial = "")
+    {
+        var dlg = new Views.ReferenceInputDialog(title, prompt, q => _references.Search(referenceDb, q, 60), initial)
+        {
+            Owner = System.Windows.Application.Current.MainWindow,
+        };
         return dlg.ShowDialog() == true ? dlg.Value : null;
     }
 
@@ -322,7 +348,7 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var editor = new RecordEditorViewModel(_overlay, _session.Commands, _references, _session.ScriptCatalog, _session.Mode, _session.Validation);
+        var editor = new RecordEditorViewModel(_overlay, _session.Commands, _references, _session.ScriptCatalog, _session.Mode, _session.Validation, _referenceIndex);
 
         // Items get list icons resolved from their client resource name (lazy, per visible row).
         Func<RecordKey, ImageSource?>? iconResolver = null;
@@ -425,6 +451,14 @@ public sealed partial class DbWorkspaceViewModel : ObservableObject, IDisposable
             if (PromptId($"New {_schema.DisplayName} entry", "ID", NextFreeId(keyField.Name)) is not { } id) return;
             if (_overlay.GetEffective(RecordKey.Of(id)) is not null) { PortReportText = $"ID {id} already exists — pick another."; return; }
             record.SetRaw(keyField.Name, id);
+        }
+        else if (keyField.Kind == FieldKind.Reference && keyField.Enum?.ReferenceDb is { } refDb)
+        {
+            // A reference key (mob_avail / pet_db "Mob") — prompt for the real value with autocomplete instead
+            // of stamping an un-editable auto "CUSTOM_n".
+            if (PromptReference($"New {_schema.DisplayName} entry", keyField.Label, refDb) is not { } chosen) return;
+            if (_overlay.GetEffective(RecordKey.Of(chosen)) is not null) { PortReportText = $"'{chosen}' already has an entry — pick another."; return; }
+            record.SetRaw(keyField.Name, chosen);
         }
         else
         {

@@ -1,4 +1,5 @@
 using MidgardStudio.Core.Lookup;
+using MidgardStudio.Core.Schemas;
 
 namespace MidgardStudio.App.Services;
 
@@ -16,6 +17,9 @@ public sealed class ReferenceResolver : IReferenceResolver
 
     public IReadOnlyList<string> Search(string referenceDb, string query, int limit = 40)
     {
+        // The mob_avail "Sprite" field is a synthetic source: mobs ∪ player jobs (NPC constants are typed).
+        if (referenceDb == MobAvailConstants.SpriteRefDb) return SearchSprite(query.Trim(), limit);
+
         var schema = _schemas.Get(referenceDb);
         if (schema is null) return Array.Empty<string>();
 
@@ -30,6 +34,33 @@ public sealed class ReferenceResolver : IReferenceResolver
             if (q.Length == 0 || aegis.Contains(q, StringComparison.OrdinalIgnoreCase))
             {
                 results.Add(aegis);
+                if (results.Count >= limit) break;
+            }
+        }
+        return results;
+    }
+
+    private IReadOnlyList<string> SearchSprite(string q, int limit)
+    {
+        var results = new List<string>(limit);
+        if (_schemas.Get("mob_db") is { } mobSchema)
+        {
+            foreach (var record in _session.GetActiveOverlay(mobSchema).Effective())
+            {
+                var aegis = record.GetString("AegisName");
+                if (string.IsNullOrEmpty(aegis)) continue;
+                if (q.Length == 0 || aegis.Contains(q, StringComparison.OrdinalIgnoreCase))
+                {
+                    results.Add(aegis);
+                    if (results.Count >= limit) return results;
+                }
+            }
+        }
+        foreach (var job in MobAvailConstants.Jobs)
+        {
+            if (q.Length == 0 || job.Contains(q, StringComparison.OrdinalIgnoreCase))
+            {
+                results.Add(job);
                 if (results.Count >= limit) break;
             }
         }
