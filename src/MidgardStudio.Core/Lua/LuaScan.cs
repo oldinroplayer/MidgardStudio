@@ -63,6 +63,21 @@ public static class LuaScan
         return -1;
     }
 
+    /// <summary>
+    /// The field separator to insert before a new entry appended just inside a table, given the table's
+    /// open and close brace indices. Returns "" if the table is empty or its last entry already ends in a
+    /// separator (<c>,</c> or <c>;</c>), else <c>","</c>. Without it a new field abuts the previous value
+    /// with only whitespace — a Lua syntax error the strict client rejects (e.g. skillid.lub's last entry
+    /// <c>AT_NATURE_HARMONY = 6607</c> has no trailing comma). Shared by every table-append path so the
+    /// rule lives, and is tested, in one place.
+    /// </summary>
+    public static string SeparatorBeforeNewEntry(string s, int open, int close)
+    {
+        int p = close - 1;
+        while (p > open && char.IsWhiteSpace(s[p])) p--;
+        return (p <= open || s[p] is '{' or ',' or ';') ? string.Empty : ",";
+    }
+
     /// <summary>Given the index of a quote char, returns the index of the closing quote.</summary>
     public static int SkipString(string s, int i)
     {
